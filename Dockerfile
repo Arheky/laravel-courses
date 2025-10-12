@@ -1,42 +1,60 @@
 # -----------------------------
-# 🚀 LaravelCourses - Render Deploy (PHP 8.2 + Node + PostgreSQL)
+# 🚀 LaravelCourses - Multi-Stage Render Deploy (PHP 8.2 + Node 20 + PostgreSQL)
 # -----------------------------
 
-# 1️⃣ Base Image
-FROM php:8.2-fpm
+########### 1️⃣ BUILD STAGE (Node + Composer) ###########
+FROM node:20-bullseye-slim AS builder
 
-# 2️⃣ System dependencies (PostgreSQL + Node için)
-RUN apt-get update && apt-get install -y \
-    git curl libpng-dev libonig-dev libxml2-dev zip unzip libpq-dev \
-    && docker-php-ext-install pdo pdo_pgsql mbstring exif pcntl bcmath gd
+# Sistem bağımlılıkları
+RUN apt-get update && apt-get install -y git unzip libpq-dev
 
-# 3️⃣ Node.js yükle (Vite build için)
-RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
-    && apt-get install -y nodejs
+# Çalışma dizini
+WORKDIR /app
 
-# 4️⃣ Composer yükle
+# Composer kur
 COPY --from=composer:2.6 /usr/bin/composer /usr/bin/composer
 
-# 5️⃣ Çalışma dizini
-WORKDIR /var/www/html
-
-# 6️⃣ Proje dosyalarını kopyala
+# Proje dosyalarını kopyala
 COPY . .
 
-# 7️⃣ Laravel ve Frontend bağımlılıklarını yükle
+# Laravel ve frontend bağımlılıklarını yükle
 RUN composer install --no-dev --optimize-autoloader \
-    && npm ci \
+    && npm install --legacy-peer-deps \
     && npm run build
 
-# 8️⃣ Laravel izinleri
-RUN chmod -R 775 storage bootstrap/cache
+########### 2️⃣ PRODUCTION STAGE (PHP 8.2-FPM) ###########
+FROM php:8.2-fpm-alpine
 
-# 9️⃣ Ortam değişkenleri
+# Sistem bağımlılıkları
+RUN apk add --no-cache libpng-dev libjpeg-turbo-dev libwebp-dev libzip-dev libpq-dev bash \
+    && docker-php-ext-install pdo pdo_pgsql bcmath mbstring zip gd
+
+# Çalışma dizini
+WORKDIR /var/www/html
+
+# Build aşamasından gerekli dosyaları kopyala
+COPY --from=builder /app/public/build ./public/build
+COPY --from=builder /app/vendor ./vendor
+COPY --from=builder /app/bootstrap ./bootstrap
+COPY --from=builder /app/artisan ./artisan
+COPY --from=builder /app/config ./config
+COPY --from=builder /app/resources ./resources
+COPY --from=builder /app/routes ./routes
+COPY --from=builder /app/database ./database
+COPY --from=builder /app/app ./app
+COPY --from=builder /app/package.json ./package.json
+
+# Laravel izinleri
+RUN chmod -R 775 storage bootstrap/cache || true
+
+# Ortam değişkenleri
 ENV APP_ENV=production
 ENV PORT=8000
 
-# 🔟 Optimize ve başlat
+# Port aç
 EXPOSE 8000
+
+# Başlatma komutu
 CMD php artisan config:clear && php artisan cache:clear && php artisan view:clear \
     && php artisan migrate --force \
     && php artisan optimize \
