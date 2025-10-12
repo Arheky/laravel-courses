@@ -1,0 +1,69 @@
+# ==========================================================
+# 🧠 LaravelCourses Projesi - .gitignore (Final Teslim Sürümü)
+# Laravel 12 + Vue 3 + Inertia.js + Vite uyumlu
+# ==========================================================
+
+# -------------------------------------------------------------------
+# 🔐 Environment & Güvenlik Dosyaları
+# -------------------------------------------------------------------
+.env
+.env.*
+!.env.example
+.env.backup
+Homestead.json
+Homestead.yaml
+auth.json
+
+# -------------------------------------------------------------------
+# 💻 İşletim Sistemi ve IDE Ayar Dosyaları
+# -------------------------------------------------------------------
+.DS_Store
+Thumbs.db
+*.log
+/.idea
+/.vscode
+/.fleet
+/.zed
+.phpactor.json
+.phpunit.result.cache
+
+# -------------------------------------------------------------------
+# ⚙️ Laravel Framework Klasörleri
+# -------------------------------------------------------------------
+/vendor
+/bootstrap/cache/*
+/storage/*.key
+/storage/pail
+/storage/framework/cache/*
+/storage/framework/sessions/*
+/storage/framework/views/*
+/storage/logs/*
+/public/storage
+/public/hot
+/public/build
+
+# -------------------------------------------------------------------
+# 🧩 Node.js / Vite / Frontend Derleme Dosyaları
+# -------------------------------------------------------------------
+/node_modules
+/.npm
+/.yarn
+/.cache
+/.vite
+/vite.config.js.timestamp*
+/pnpm-lock.yaml
+/yarn.lock
+
+# -------------------------------------------------------------------
+# 🧪 Test ve Kod Kapsamı (Coverage)
+# -------------------------------------------------------------------
+/coverage
+/.phpunit.cache
+/.phpunit.result.cache
+/.nyc_output
+
+# -------------------------------------------------------------------
+# 🧰 Diğer (Laravel Nova vb.)
+# -------------------------------------------------------------------
+/nova
+/.nova
