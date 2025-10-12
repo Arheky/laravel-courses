@@ -1,5 +1,5 @@
 # -----------------------------
-# LaravelCourses - Render Deploy (PHP 8.2 + Node + PostgreSQL)
+# 🚀 LaravelCourses - Render Deploy (PHP 8.2 + Node + PostgreSQL)
 # -----------------------------
 
 # 1️⃣ Base Image
@@ -23,17 +23,21 @@ WORKDIR /var/www/html
 # 6️⃣ Proje dosyalarını kopyala
 COPY . .
 
-# 7️⃣ Backend ve Frontend bağımlılıklarını yükle
-RUN composer install --no-dev --optimize-autoloader
-RUN npm install && npm run build
+# 7️⃣ Laravel ve Frontend bağımlılıklarını yükle
+RUN composer install --no-dev --optimize-autoloader \
+    && npm ci \
+    && npm run build
 
 # 8️⃣ Laravel izinleri
 RUN chmod -R 775 storage bootstrap/cache
 
-# 9️⃣ ENV değişkenleri
+# 9️⃣ Ortam değişkenleri
 ENV APP_ENV=production
 ENV PORT=8000
 
-# 🔟 Uygulamayı başlat (migrate dahil)
+# 🔟 Optimize ve başlat
 EXPOSE 8000
-CMD php artisan migrate --force && php artisan optimize:clear && php artisan config:cache && php artisan serve --host=0.0.0.0 --port=8000
+CMD php artisan config:clear && php artisan cache:clear && php artisan view:clear \
+    && php artisan migrate --force \
+    && php artisan optimize \
+    && php artisan serve --host=0.0.0.0 --port=8000
