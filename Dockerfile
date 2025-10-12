@@ -31,6 +31,6 @@ RUN chmod -R 775 storage bootstrap/cache
 ENV APP_ENV=production
 ENV PORT=8000
 
-# 9️⃣ Serve
+# 9️⃣ Serve (migrate dahil)
 EXPOSE 8000
-CMD php artisan migrate --force && php artisan serve --host=0.0.0.0 --port=8000
+CMD php artisan migrate --force && php artisan optimize:clear && php artisan config:cache && php artisan serve --host=0.0.0.0 --port=8000
