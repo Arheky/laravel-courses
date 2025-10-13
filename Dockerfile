@@ -1,43 +1,54 @@
-# ---------- Stage 1: Frontend ----------
-FROM node:18 AS frontend
+# ---------- STAGE 1: FRONTEND (Vite Build - Node 20) ----------
+FROM node:20 AS frontend
 WORKDIR /app
+
+# 1️⃣ Daha hızlı ve kararlı bağımlılık yönetimi için pnpm kullanıyoruz
+RUN npm install -g pnpm
+
+# 2️⃣ Paket dosyalarını kopyala
 COPY package*.json ./
-RUN npm install
+
+# 3️⃣ Bağımlılıkları kur (peer-dep hatalarını yok say)
+RUN pnpm install --no-frozen-lockfile
+
+# 4️⃣ Kaynak kodu kopyala
 COPY . .
-RUN npm run build
+
+# 5️⃣ Frontend'i derle (Vite)
+RUN pnpm run build
 
 
-# ---------- Stage 2: Backend ----------
-FROM php:8.2-fpm
+# ---------- STAGE 2: BACKEND (Laravel + PHP + Composer) ----------
+FROM php:8.3-fpm AS backend
 WORKDIR /var/www
 
-# Sistem bağımlılıkları
+# 1️⃣ Gerekli sistem paketleri
 RUN apt-get update && apt-get install -y \
-    git curl unzip libpq-dev libzip-dev libonig-dev zip vim nano \
-    && docker-php-ext-install pdo pdo_pgsql pgsql mbstring zip bcmath
+    git curl unzip libpq-dev libzip-dev libonig-dev zip \
+    && docker-php-ext-install pdo_pgsql pgsql mbstring zip bcmath
 
-# Composer
+# 2️⃣ Composer'ı yükle
 COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
 
-# Uygulama dosyaları
+# 3️⃣ Laravel kaynaklarını kopyala
 COPY . .
 
-# Frontend build çıktısını kopyala
+# 4️⃣ Frontend build çıktısını public'e taşı
 COPY --from=frontend /app/public/build ./public/build
 
-# PHP bağımlılıkları
+# 5️⃣ PHP bağımlılıklarını kur
 RUN composer install --no-dev --optimize-autoloader --no-interaction --prefer-dist
 
-# Laravel önbellek işlemleri
-RUN php artisan key:generate --force || true
-RUN php artisan config:clear || true
-RUN php artisan cache:clear || true
-RUN php artisan route:clear || true
-RUN php artisan view:clear || true
+# 6️⃣ Laravel cache ve optimize işlemleri
+RUN php artisan key:generate --force || true && \
+    php artisan config:clear || true && \
+    php artisan cache:clear || true && \
+    php artisan route:clear || true && \
+    php artisan view:clear || true && \
+    php artisan optimize || true
 
-# Laravel migration (DB bağlantısı varsa çalışır)
-RUN php artisan migrate --force || true
-RUN php artisan optimize
-
+# 7️⃣ Render HTTP portunu aç
 EXPOSE 10000
+
+# 8️⃣ Laravel uygulamasını başlat
 CMD ["php", "artisan", "serve", "--host=0.0.0.0", "--port=10000"]
