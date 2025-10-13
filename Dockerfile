@@ -1,16 +1,18 @@
 # ---------- STAGE 1: Frontend Build ----------
 FROM node:18 AS frontend
+ENV NODE_ENV=production
+ENV NODE_OPTIONS="--max-old-space-size=4096"
+
 WORKDIR /app
 
 # 1️⃣ Paket dosyalarını yükle
 COPY package*.json ./
-RUN npm install
+RUN npm install --legacy-peer-deps
 
 # 2️⃣ Tüm kaynakları kopyala
 COPY . .
 
-# 3️⃣ Production modunda build al (manifest.json dahil)
-ENV NODE_ENV=production
+# 3️⃣ Vite ile build al (çıktı: public/build)
 RUN npm run build
 
 
