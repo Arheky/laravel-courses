@@ -9,7 +9,8 @@ RUN npm install
 # 2️⃣ Tüm kaynakları kopyala
 COPY . .
 
-# 3️⃣ Vite ile build al (çıktı: public/build)
+# 3️⃣ Production modunda build al (manifest.json dahil)
+ENV NODE_ENV=production
 RUN npm run build
 
 
@@ -25,23 +26,23 @@ RUN apt-get update && apt-get install -y \
 # 2️⃣ Composer’ı yükle
 COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
 
-# 3️⃣ Uygulama dosyalarını kopyala
+# 3️⃣ Laravel uygulamasını kopyala
 COPY . .
 
 # 4️⃣ Frontend build çıktısını backend’e kopyala
 COPY --from=frontend /app/public/build ./public/build
 
-# 5️⃣ Composer cache'i temizle + PHP bağımlılıklarını yükle
+# 5️⃣ Composer cache'i temizle + bağımlılıkları yükle
 RUN composer clear-cache && \
     composer install --no-dev --optimize-autoloader --no-interaction --prefer-dist
 
-# 6️⃣ Laravel cache’lerini temizle + dosya izinlerini düzelt
+# 6️⃣ Laravel cache’lerini temizle + izinleri düzelt
 RUN php artisan config:clear && \
     php artisan route:clear && \
     php artisan view:clear && \
     chmod -R 775 storage bootstrap/cache
 
-# 7️⃣ Render HTTP erişimi için port aç
+# 7️⃣ Render için portu aç
 EXPOSE 10000
 
 # 8️⃣ Laravel uygulamasını başlat
