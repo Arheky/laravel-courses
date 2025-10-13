@@ -26,6 +26,7 @@ export default defineConfig(({ command, mode }) => {
       target: ['es2022', 'chrome90'],
       outDir: 'public/build',
       manifest: true,
+      emptyOutDir: true,
       rollupOptions: {
         output: {
           chunkFileNames: 'js/[name]-[hash].js',
