@@ -22,8 +22,8 @@ WORKDIR /var/www
 # Copy app files
 COPY . .
 
-# Copy built frontend from Stage 1
-COPY --from=frontend /app/public/dist ./public/dist
+# Correct build path for Vite
+COPY --from=frontend /app/public/build ./public/build
 
 # Install PHP dependencies
 RUN composer install --no-dev --optimize-autoloader
