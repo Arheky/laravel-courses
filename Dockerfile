@@ -31,13 +31,15 @@ COPY . .
 # 4️⃣ Frontend build çıktısını backend’e kopyala
 COPY --from=frontend /app/public/build ./public/build
 
-# 5️⃣ PHP bağımlılıklarını yükle
-RUN composer install --no-dev --optimize-autoloader --no-interaction --prefer-dist
+# 5️⃣ Composer cache'i temizle + PHP bağımlılıklarını yükle
+RUN composer clear-cache && \
+    composer install --no-dev --optimize-autoloader --no-interaction --prefer-dist
 
-# 6️⃣ Laravel cache’lerini temizle
+# 6️⃣ Laravel cache’lerini temizle + dosya izinlerini düzelt
 RUN php artisan config:clear && \
     php artisan route:clear && \
-    php artisan view:clear
+    php artisan view:clear && \
+    chmod -R 775 storage bootstrap/cache
 
 # 7️⃣ Render HTTP erişimi için port aç
 EXPOSE 10000
