@@ -7,6 +7,7 @@ use Illuminate\Pagination\Paginator;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\App;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\URL;
 use Inertia\Inertia;
 use Carbon\Carbon;
 
@@ -48,6 +49,9 @@ class AppServiceProvider extends ServiceProvider
         if (app()->environment('production')) {
             error_reporting(E_ALL & ~E_NOTICE & ~E_DEPRECATED);
             ini_set('display_errors', '0');
+
+            // HTTPS yönlendirmesini zorla (Render için kritik)
+            URL::forceScheme('https');
         }
     }
 }
