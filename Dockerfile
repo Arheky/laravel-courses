@@ -1,62 +1,36 @@
-# -----------------------------
-# 🚀 LaravelCourses - Render Deploy (PHP 8.2 + Node 20 + PostgreSQL)
-# Güvenli Otomatik Versiyon (.env fallback dahil)
-# -----------------------------
+# Stage 1 - Build Frontend (Vite)
+FROM node:18 AS frontend
+WORKDIR /app
+COPY package*.json ./
+RUN npm install
+COPY . .
+RUN npm run build
 
-FROM php:8.2-fpm
+# Stage 2 - Backend (Laravel + PHP + Composer)
+FROM php:8.2-fpm AS backend
 
-# 1️⃣ Sistem bağımlılıkları
+# Install system dependencies
 RUN apt-get update && apt-get install -y \
-    git curl zip unzip libpng-dev libonig-dev libxml2-dev libpq-dev \
-    && docker-php-ext-install pdo pdo_pgsql mbstring exif pcntl bcmath gd
+    git curl unzip libpq-dev libonig-dev libzip-dev zip \
+    && docker-php-ext-install pdo pdo_mysql mbstring zip
 
-# 2️⃣ Node.js kurulumu
-RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
-    && apt-get install -y nodejs
+# Install Composer
+COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
 
-# 3️⃣ Composer kurulumu
-COPY --from=composer:2.6 /usr/bin/composer /usr/bin/composer
+WORKDIR /var/www
 
-# 4️⃣ Çalışma dizini
-WORKDIR /var/www/html
-
-# 5️⃣ Proje dosyalarını kopyala
+# Copy app files
 COPY . .
 
-# 6️⃣ Laravel + Frontend bağımlılıkları
-RUN composer install --no-dev --optimize-autoloader \
-    && npm install --legacy-peer-deps \
-    && npm run build
+# Copy built frontend from Stage 1
+COPY --from=frontend /app/public/dist ./public/dist
 
-# 7️⃣ Laravel izinleri
-RUN chmod -R 775 storage bootstrap/cache || true
+# Install PHP dependencies
+RUN composer install --no-dev --optimize-autoloader
 
-# 8️⃣ Ortam değişkenleri
-ENV APP_ENV=production
-ENV PORT=8000
+# Laravel setup
+RUN php artisan config:clear && \
+    php artisan route:clear && \
+    php artisan view:clear
 
-# 9️⃣ Laravel başlangıç (env kontrolü + otomatik işlemler)
-EXPOSE 8000
-CMD if [ ! -f ".env" ]; then \
-      echo "⚙️ .env bulunamadı, geçici oluşturuluyor..."; \
-      echo "APP_KEY=base64:$(php -r 'echo base64_encode(random_bytes(32));')" > .env; \
-      echo "APP_ENV=production" >> .env; \
-      echo "APP_DEBUG=false" >> .env; \
-      echo "APP_URL=https://laravel-courses.onrender.com" >> .env; \
-      echo "DB_CONNECTION=pgsql" >> .env; \
-      echo "DB_HOST=$DB_HOST" >> .env; \
-      echo "DB_PORT=$DB_PORT" >> .env; \
-      echo "DB_DATABASE=$DB_DATABASE" >> .env; \
-      echo "DB_USERNAME=$DB_USERNAME" >> .env; \
-      echo "DB_PASSWORD=$DB_PASSWORD" >> .env; \
-      echo "DB_SSLMODE=require" >> .env; \
-    fi \
-    && php artisan config:clear \
-    && php artisan cache:clear \
-    && php artisan view:clear \
-    && php artisan migrate --force \
-    && php artisan storage:link || true \
-    && php artisan route:cache \
-    && php artisan view:cache \
-    && php artisan optimize \
-    && php artisan serve --host=0.0.0.0 --port=8000
+CMD ["php-fpm"]
