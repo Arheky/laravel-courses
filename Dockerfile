@@ -2,20 +2,17 @@
 FROM node:20 AS frontend
 WORKDIR /app
 
-# 1️⃣ Daha hızlı ve kararlı bağımlılık yönetimi için pnpm kullanıyoruz
-RUN npm install -g pnpm
-
-# 2️⃣ Paket dosyalarını kopyala
+# 1️⃣ Paket dosyalarını kopyala
 COPY package*.json ./
 
-# 3️⃣ Bağımlılıkları kur (peer-dep hatalarını yok say)
-RUN pnpm install --no-frozen-lockfile
+# 2️⃣ Bağımlılıkları kur (peer-dep hatalarını yok say)
+RUN npm install --legacy-peer-deps
 
-# 4️⃣ Kaynak kodu kopyala
+# 3️⃣ Kaynak kodu kopyala
 COPY . .
 
-# 5️⃣ Frontend'i derle (Vite)
-RUN pnpm run build
+# 4️⃣ Frontend'i derle (Vite)
+RUN npm run build
 
 
 # ---------- STAGE 2: BACKEND (Laravel + PHP + Composer) ----------
