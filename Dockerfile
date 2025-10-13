@@ -39,10 +39,17 @@ ENV PORT=8000
 EXPOSE 8000
 CMD if [ ! -f ".env" ]; then \
       echo "⚙️ .env bulunamadı, geçici oluşturuluyor..."; \
-      echo "APP_KEY=base64:$(php -r 'echo base64_encode(random_bytes(32));')"; \
-      echo "APP_ENV=production"; \
-      echo "APP_DEBUG=false"; \
-      echo "APP_URL=https://laravel-courses.onrender.com"; \
+      echo "APP_KEY=base64:$(php -r 'echo base64_encode(random_bytes(32));')" > .env; \
+      echo "APP_ENV=production" >> .env; \
+      echo "APP_DEBUG=false" >> .env; \
+      echo "APP_URL=https://laravel-courses.onrender.com" >> .env; \
+      echo "DB_CONNECTION=pgsql" >> .env; \
+      echo "DB_HOST=$DB_HOST" >> .env; \
+      echo "DB_PORT=$DB_PORT" >> .env; \
+      echo "DB_DATABASE=$DB_DATABASE" >> .env; \
+      echo "DB_USERNAME=$DB_USERNAME" >> .env; \
+      echo "DB_PASSWORD=$DB_PASSWORD" >> .env; \
+      echo "DB_SSLMODE=require" >> .env; \
     fi \
     && php artisan config:clear \
     && php artisan cache:clear \
