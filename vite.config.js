@@ -53,6 +53,6 @@ export default defineConfig(({ command, mode }) => {
     },
 
     // 🌐 Mixed Content (HTTPS/HTTP) fix
-    base: isProduction ? '/' : 'http://localhost:5173/',
+    base: isProduction ? '/build/' : 'http://localhost:5173/',
   }
 })
