@@ -1,15 +1,19 @@
 import axios from 'axios'
-window.axios = axios
 
-// Base URL — hem Docker local, hem Render production için
-window.axios.defaults.baseURL = import.meta.env.VITE_APP_URL || 'http://localhost'
+axios.defaults.withCredentials = true
+axios.defaults.headers.common['X-Requested-With'] = 'XMLHttpRequest'
 
-// Cookie ve CSRF işlemleri için ayarlar
-window.axios.defaults.withCredentials = true
-window.axios.defaults.headers.common['X-Requested-With'] = 'XMLHttpRequest'
+// 🌍 Ortama göre dinamik backend URL
+const baseURL =
+  import.meta.env.MODE === 'production'
+    ? 'https://laravel-courses.onrender.com' // Render domain
+    : 'http://localhost:8000' // Local geliştirme
 
-// Sayfa ilk açıldığında CSRF cookie’yi garanti et
+axios.defaults.baseURL = baseURL
+
+// 🔒 CSRF cookie otomatik ayarı
 axios
-  .get('/sanctum/csrf-cookie')
-  .then(() => console.info('[Bootstrap] CSRF cookie hazır ✅'))
-  .catch((e) => console.warn('[Bootstrap] CSRF cookie alınamadı:', e.message))
+  .get(`${baseURL}/sanctum/csrf-cookie`)
+  .catch(() => console.warn('⚠️ CSRF cookie alınamadı.'))
+
+export default axios
