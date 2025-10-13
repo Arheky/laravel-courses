@@ -12,7 +12,7 @@ FROM php:8.2-fpm AS backend
 # Install system dependencies
 RUN apt-get update && apt-get install -y \
     git curl unzip libpq-dev libonig-dev libzip-dev zip \
-    && docker-php-ext-install pdo pdo_mysql mbstring zip
+    && docker-php-ext-install pdo pdo_mysql mbstring zip bcmath
 
 # Install Composer
 COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
@@ -22,11 +22,11 @@ WORKDIR /var/www
 # Copy app files
 COPY . .
 
-# Correct build path for Vite
+# Copy built frontend from Stage 1
 COPY --from=frontend /app/public/build ./public/build
 
 # Install PHP dependencies
-RUN composer install --no-dev --optimize-autoloader
+RUN composer install --no-dev --optimize-autoloader --no-interaction --prefer-dist
 
 # Laravel setup
 RUN php artisan config:clear && \
