@@ -1,20 +1,15 @@
 # ---------- STAGE 1: Frontend Build ----------
-FROM node:18 AS frontend
+FROM node:20 AS frontend
 ENV NODE_ENV=production
 ENV NODE_OPTIONS="--max-old-space-size=4096"
 
 WORKDIR /app
 
-# 1️⃣ Paket dosyalarını yükle
 COPY package*.json ./
 RUN npm install --legacy-peer-deps
 
-# 2️⃣ Kaynakları kopyala
 COPY . .
-
-# 3️⃣ Vite ile production build al (çıktı: public/build)
 RUN npx vite build
-
 
 # ---------- STAGE 2: Backend (Laravel + PHP + Composer) ----------
 FROM php:8.2-fpm AS backend
