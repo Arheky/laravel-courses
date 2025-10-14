@@ -34,7 +34,6 @@ COPY . .
 # 4️⃣ ✅ Frontend build çıktısını doğru yere kopyala
 #    (önceki versiyonlarda bu eksikti)
 COPY --from=frontend /app/public/build ./public/build
-COPY --from=frontend /app/public/build/manifest.json ./public/build/manifest.json
 
 # 5️⃣ PHP bağımlılıklarını kur
 RUN composer install --no-dev --optimize-autoloader --no-interaction --prefer-dist
