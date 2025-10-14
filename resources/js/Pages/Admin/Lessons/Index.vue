@@ -151,7 +151,7 @@ watchDebounced(
       {
         preserveState: true,
         replace: true,
-        only: ['courses', 'filters'],
+        only: ['lessons', 'filters'],
         onSuccess: (page) => {
           lessonStore.setLessons(page.props.lessons?.data || [])
           paginationStore.setLinks(page.props.lessons?.links || [])
