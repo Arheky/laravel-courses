@@ -24,8 +24,17 @@ class Handler extends ExceptionHandler
 
     public function register(): void
     {
-        $this->reportable(function (Throwable $e) {
-            //
+        $this->renderable(function (TooManyRequestsHttpException $e, $request) {
+            $retryAfter = (int) ($e->getHeaders()['Retry-After'] ?? 60);
+            $msg = "Çok fazla hatalı giriş denemesi! {$retryAfter} saniye bekleyin ⏳";
+            if ($request->expectsJson() || $request->header('X-Inertia')) {
+                return response()->json([
+                    'message'     => $msg,
+                    'retry_after' => $retryAfter,
+                    'errors'      => ['email' => $msg],
+                ], 429);
+            }
+            return back()->withErrors(['email' => $msg])->withInput();
         });
     }
 
