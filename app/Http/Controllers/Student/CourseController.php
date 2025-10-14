@@ -8,6 +8,8 @@ use App\Models\User;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 
 class CourseController extends Controller
 {
@@ -19,15 +21,37 @@ class CourseController extends Controller
     {
         $query = Course::query()->withCount(['students', 'lessons']);
 
-        if ($search = $request->get('search')) {
-            $query->where(function ($q) use ($search) {
-                $q->where('title', 'like', "%{$search}%")
-                ->orWhere('instructor', 'like', "%{$search}%");
-            });
+        if ($raw = $request->string('search')->toString()) {
+            $normalized = Str::of($raw)
+                ->lower()
+                ->replaceMatches('/[^\pL\pN\s]+/u', ' ')
+                ->squish();
+            $terms = collect(explode(' ', $normalized))->filter();
+            if ($terms->isNotEmpty()) {
+                $like = DB::getDriverName() === 'pgsql' ? 'ILIKE' : 'LIKE';
+    
+                $query->where(function ($outer) use ($terms, $like) {
+                    foreach ($terms as $term) {
+                        $pattern = "%{$term}%";
+                        $outer->where(function ($q) use ($pattern, $like) {
+                            $q->where('title', $like, $pattern)
+                              ->orWhere('description', $like, $pattern)
+                              ->orWhere('instructor', $like, $pattern);
+                        });
+                    }
+                });
+            }
         }
-
-        $sort = $request->get('sort', 'desc');
-        $courses = $query->orderBy('created_at', $sort)->paginate(9)->withQueryString();
+    
+        // Sıralama güvenli
+        $sort = strtolower($request->input('sort', 'desc'));
+        if (!in_array($sort, ['asc', 'desc'], true)) {
+            $sort = 'desc';
+        }
+    
+        $courses = $query->orderBy('created_at', $sort)
+            ->paginate(9)
+            ->withQueryString();
 
         // Giriş yapan öğrencinin kayıtlı olduğu kursları al
         /** @var \App\Models\User|null $user */
