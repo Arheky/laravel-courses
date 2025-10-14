@@ -38,13 +38,24 @@ COPY --from=frontend /app/public/build ./public/build
 # 5️⃣ PHP bağımlılıklarını kur
 RUN composer install --no-dev --optimize-autoloader --no-interaction --prefer-dist
 
-# 6️⃣ Laravel cache ve optimize işlemleri
+# 6️⃣ Laravel cache ve optimize işlemlerini runtime'da çalıştırmak için build'te sadece temizleme yapıyoruz
 RUN php artisan config:clear && \
     php artisan route:clear && \
-    php artisan view:clear
+    php artisan view:clear && \
+    chmod -R 775 storage bootstrap/cache
 
 # 7️⃣ Render HTTP portunu aç
 EXPOSE 10000
 
-# 8️⃣ Laravel uygulamasını başlat
-CMD ["php", "artisan", "serve", "--host=0.0.0.0", "--port=10000"]
+# 8️⃣ Laravel uygulamasını başlat (runtime aşamasında APP_KEY kontrolü + optimize)
+CMD if [ -z "$APP_KEY" ]; then \
+      echo "⚠️  APP_KEY bulunamadı, yeni anahtar oluşturuluyor..."; \
+      php artisan key:generate --force; \
+    fi && \
+    echo "🚀 Laravel optimize ediliyor..." && \
+    php artisan config:clear && \
+    php artisan cache:clear && \
+    php artisan route:clear && \
+    php artisan view:clear && \
+    php artisan optimize && \
+    php artisan serve --host=0.0.0.0 --port=10000
