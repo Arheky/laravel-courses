@@ -52,45 +52,39 @@ window.showToast = (message, type = 'info', options = {}) => {
   }
 }
 
-// Rate limit interceptor (429 durumunu yakala)
+// Rate limit interceptor
+window.__rateToastTs = 0
 window.axios.interceptors.response.use(
   (r) => r,
   (error) => {
-    if (error.response && error.response.status === 429) {
-      const data = error.response.data || {}
+    const res = error?.response
+    if (res?.status === 429) {
+      const data = res.data || {}
+      const headers = res.headers || {}
       let remaining =
-        typeof data.retry_after === 'number'
-          ? data.retry_after
-          : (() => {
-              const msg = data.message || data.errors?.email?.[0] || ''
-              const m = msg.match(/(\d+)\s*saniye/)
-              return m ? parseInt(m[1], 10) : null
-            })()
-      if (remaining && remaining > 0) {
-        window.appState.rateRemaining = remaining
+        (typeof data.retry_after === 'number' && data.retry_after) ||
+        (typeof data.retryAfter === 'number' && data.retryAfter) ||
+        (headers['x-ratelimit-retry-after'] && parseInt(headers['x-ratelimit-retry-after'], 10)) ||
+        (headers['retry-after'] && parseInt(headers['retry-after'], 10)) ||
+        (() => {
+          const msg = data.message || data.errors?.email?.[0] || ''
+          const m = msg.match(/(\d+)\s*saniye/)
+          return m ? parseInt(m[1], 10) : null
+        })()
+      if (Number.isFinite(remaining) && remaining > 0) {
+        window.dispatchEvent(new CustomEvent('auth-rate-limit', { detail: { remaining } }))
         window.appState.rateLimited = true
-
-        if (window.appState.rateTimer) clearInterval(window.appState.rateTimer)
-        toast.dismiss()
-
-        const id = toast.warning(
-          `Çok fazla hatalı giriş denemesi! ${remaining} saniye bekleyin ⏳`,
-          { position: 'top-center', autoClose: false }
-        )
-
-        window.appState.rateTimer = setInterval(() => {
-          window.appState.rateRemaining--
-          if (window.appState.rateRemaining > 0) {
-            toast.update(id, {
-              render: `Çok fazla hatalı giriş denemesi! ${window.appState.rateRemaining} saniye bekleyin ⏳`,
-            })
-          } else {
-            clearInterval(window.appState.rateTimer)
-            window.appState.rateLimited = false
-            toast.dismiss(id)
-            toast.info('Tekrar giriş yapabilirsiniz ✅')
-          }
-        }, 1000)
+        window.appState.rateRemaining = remaining
+      }
+      const now = Date.now()
+      if (!window.__rateToastTs || now - window.__rateToastTs > 2500) {
+        window.__rateToastTs = now
+        toast.warning('Çok fazla hatalı giriş denemesi! Lütfen bekleyin ⏳', {
+          position: 'top-center',
+          autoClose: 3000,
+          closeOnClick: true,
+          pauseOnHover: true,
+        })
       }
     }
     return Promise.reject(error)
