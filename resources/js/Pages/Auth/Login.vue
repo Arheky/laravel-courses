@@ -1,7 +1,7 @@
 <script setup>
 import GuestLayout from '@/Layouts/GuestLayout.vue'
 import { Link, useForm, usePage } from '@inertiajs/vue3'
-import { ref, onMounted, watch, nextTick } from 'vue'
+import { ref, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import lottie from 'lottie-web'
 import hourglassAnim from '@/Animations/hourglass.json'
 
@@ -9,7 +9,6 @@ import hourglassAnim from '@/Animations/hourglass.json'
 const isLocked = ref(false)
 const lockSeconds = ref(0)
 let timer = null
-let toastShown = false
 let lottieInstance = null
 
 const hourglassRef = ref(null)
@@ -43,24 +42,18 @@ watch(isLocked, async (locked) => {
   }
 })
 
-/* Kilidi başlat */
+/* Kilidi başlat (uyarı tostu YOK; uyarıyı interceptor gösteriyor) */
 function startLock(seconds) {
   clearInterval(timer)
   isLocked.value = true
   lockSeconds.value = seconds
   localStorage.setItem('rateLimiter', JSON.stringify({ until: Date.now() + seconds * 1000 }))
 
-  if (!toastShown) {
-    toastShown = true
-    window.showToast('Çok fazla hatalı giriş denemesi! Lütfen bekleyin ⏳', 'warning')
-  }
-
   timer = setInterval(() => {
     lockSeconds.value--
     if (lockSeconds.value <= 0) {
       clearInterval(timer)
       isLocked.value = false
-      toastShown = false
       localStorage.removeItem('rateLimiter')
       window.showToast('Tekrar giriş yapabilirsiniz ✅', 'info')
     } else {
@@ -69,8 +62,16 @@ function startLock(seconds) {
   }, 1000)
 }
 
-/* Sayfa yenilense bile kalan süreyi koru */
+/* Interceptor'dan gelen rate-limit olayını dinle */
+const handleRateLimit = (e) => {
+  const secs = Number(e?.detail?.remaining) || 0
+  if (secs > 0) startLock(secs)
+}
+
+/* Sayfa yenilense bile kalan süreyi koru + event bağla */
 onMounted(() => {
+  window.addEventListener('auth-rate-limit', handleRateLimit)
+
   const stored = localStorage.getItem('rateLimiter')
   if (stored) {
     const data = JSON.parse(stored)
@@ -82,6 +83,12 @@ onMounted(() => {
       localStorage.removeItem('rateLimiter')
     }
   }
+})
+
+onUnmounted(() => {
+  window.removeEventListener('auth-rate-limit', handleRateLimit)
+  if (timer) clearInterval(timer)
+  if (lottieInstance) lottieInstance.destroy()
 })
 
 /* Giriş işlemi */
@@ -112,18 +119,17 @@ function submit() {
       })
     },
     onSuccess: () => {
-     if (loadingToastId) window.$toast.remove(loadingToastId)
-       const props = usePage().props
-       const hasErrors = props?.errors && Object.keys(props.errors).length > 0
-       const isLoggedIn = !!props?.auth?.user
-       const stillOnLogin = route().current('login')
-     if (hasErrors || !isLoggedIn || stillOnLogin) {
-       window.showToast('Girdiğiniz e-posta adresi veya şifre hatalı ❌', 'error')
-       return
-     }
-
-     window.showToast('Hoş geldin 👋 Başarıyla giriş yaptın!', 'success')
-  },
+      if (loadingToastId) window.$toast.remove(loadingToastId)
+      const props = usePage().props
+      const hasErrors = props?.errors && Object.keys(props.errors).length > 0
+      const isLoggedIn = !!props?.auth?.user
+      const stillOnLogin = route().current('login')
+      if (hasErrors || !isLoggedIn || stillOnLogin) {
+        window.showToast('Girdiğiniz e-posta adresi veya şifre hatalı ❌', 'error')
+        return
+      }
+      window.showToast('Hoş geldin 👋 Başarıyla giriş yaptın!', 'success')
+    },
     onError: (errors) => {
       if (loadingToastId) window.$toast.remove(loadingToastId)
       const msg = Object.values(errors).join(' ')
