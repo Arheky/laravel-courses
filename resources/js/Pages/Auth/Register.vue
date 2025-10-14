@@ -152,8 +152,7 @@
 <script setup>
 import GuestLayout from '@/Layouts/GuestLayout.vue'
 import { Link, useForm } from '@inertiajs/vue3'
-import { ref, onMounted } from 'vue'
-import axios from 'axios'
+import { ref, onMounted, onBeforeUnmount, nextTick } from 'vue'
 import lottie from 'lottie-web'
 import hourglassAnim from '@/Animations/hourglass.json'
 
@@ -163,6 +162,8 @@ const lockSeconds = ref(0)
 let timer = null
 let toastShown = false
 const lottieContainer = ref(null)
+let lottieInstance = null
+
 const showPassword = ref(false)
 const showConfirm = ref(false)
 
@@ -173,12 +174,13 @@ const form = useForm({
   password_confirmation: '',
 })
 
-/* CSRF cookie al */
+/* CSRF cookie ve kilit devamlılığı */
 onMounted(async () => {
   try {
-    await axios.get('/sanctum/csrf-cookie', { withCredentials: true })
-    console.info('[Register] CSRF cookie hazır ✅')
-
+    if (window.axios) {
+      await window.axios.get('/sanctum/csrf-cookie', { withCredentials: true })
+    }
+    // Kilit devamı
     const stored = localStorage.getItem('registerRateLimit')
     if (stored) {
       const data = JSON.parse(stored)
@@ -195,7 +197,15 @@ onMounted(async () => {
   }
 })
 
-/* Rate limiter kilidi başlat */
+onBeforeUnmount(() => {
+  clearInterval(timer)
+  if (lottieInstance) {
+    lottieInstance.destroy()
+    lottieInstance = null
+  }
+})
+
+/* Rate limiter kilidi başlat (toast tek seferlik) */
 function startLock(seconds) {
   clearInterval(timer)
   isLocked.value = true
@@ -207,15 +217,18 @@ function startLock(seconds) {
     window.showToast('Çok fazla kayıt denemesi! Lütfen bekleyin ⏳', 'warning')
   }
 
-  if (lottieContainer.value) {
-    lottie.loadAnimation({
-      container: lottieContainer.value,
-      renderer: 'svg',
-      loop: true,
-      autoplay: true,
-      animationData: hourglassAnim,
-    })
-  }
+  nextTick(() => {
+    if (lottieContainer.value) {
+      if (lottieInstance) lottieInstance.destroy()
+      lottieInstance = lottie.loadAnimation({
+        container: lottieContainer.value,
+        renderer: 'svg',
+        loop: true,
+        autoplay: true,
+        animationData: hourglassAnim,
+      })
+    }
+  })
 
   timer = setInterval(() => {
     lockSeconds.value--
@@ -224,6 +237,10 @@ function startLock(seconds) {
       isLocked.value = false
       toastShown = false
       localStorage.removeItem('registerRateLimit')
+      if (lottieInstance) {
+        lottieInstance.destroy()
+        lottieInstance = null
+      }
       window.showToast('Tekrar kayıt olabilirsiniz ✅', 'info')
     } else {
       localStorage.setItem('registerRateLimit', JSON.stringify({ until: Date.now() + lockSeconds.value * 1000 }))
@@ -237,30 +254,29 @@ function submit() {
     return window.showToast(`Lütfen ${lockSeconds.value} saniye bekleyin ⏳`, 'warning')
 
   // Kurallar
-  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
-  const nameRegex = /^[a-zA-ZığüşöçİĞÜŞÖÇ0-9\s]+$/; // sadece harf, rakam ve boşluk
-  const passwordRegex = /^[a-zA-ZığüşöçİĞÜŞÖÇ0-9_*]+$/; // ✅ sadece harf, rakam, _ ve *
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/
+  const nameRegex = /^[a-zA-ZığüşöçİĞÜŞÖÇ0-9\s]+$/
+  const passwordRegex = /^[a-zA-ZığüşöçİĞÜŞÖÇ0-9_*]+$/
 
-  // Alan kontrolü
   if (!form.name || !form.email || !form.password)
-    return window.showToast('Tüm alanları doldurmalısın 🚫', 'warning');
+    return window.showToast('Tüm alanları doldurmalısın 🚫', 'warning')
 
   if (!nameRegex.test(form.name))
-    return window.showToast('Ad soyad özel karakter içeremez ⚠️', 'warning');
+    return window.showToast('Ad soyad özel karakter içeremez ⚠️', 'warning')
 
   if (!emailRegex.test(form.email))
-    return window.showToast('Geçerli bir e-posta adresi girin (örnek@site.com) 📮', 'warning');
+    return window.showToast('Geçerli bir e-posta adresi girin (örnek@site.com) 📮', 'warning')
 
   if (form.password.length < 8)
-    return window.showToast('Şifre en az 8 karakter olmalıdır 🔐', 'warning');
+    return window.showToast('Şifre en az 8 karakter olmalıdır 🔐', 'warning')
 
   if (!passwordRegex.test(form.password))
-    return window.showToast('Şifre sadece harf, rakam, _ ve * karakterlerinden oluşabilir ❌', 'warning');
+    return window.showToast('Şifre sadece harf, rakam, _ ve * karakterlerinden oluşabilir ❌', 'warning')
 
   if (form.password !== form.password_confirmation)
-    return window.showToast('Şifreler eşleşmiyor ❌', 'warning');
+    return window.showToast('Şifreler eşleşmiyor ❌', 'warning')
 
-  let loadingToastId = null;
+  let loadingToastId = null
 
   form.post(route('register'), {
     preserveScroll: true,
@@ -270,31 +286,32 @@ function submit() {
         position: 'top-center',
         autoClose: false,
         closeOnClick: false,
-      });
+      })
     },
     onSuccess: () => {
-      if (loadingToastId) window.$toast.remove(loadingToastId);
-      window.showToast('🎉 Kayıt başarılı! Şimdi giriş yapabilirsiniz 👋', 'success');
-      setTimeout(() => (window.location.href = route('login')), 1200);
+      if (loadingToastId) window.$toast.remove(loadingToastId)
+      window.showToast('🎉 Kayıt başarılı! Şimdi giriş yapabilirsiniz 👋', 'success')
+      setTimeout(() => (window.location.href = route('login')), 1200)
     },
     onError: (errors) => {
-      if (loadingToastId) window.$toast.remove(loadingToastId);
-      const msg = Object.values(errors).join(' ');
-      const match = msg.match(/(\d+)\s*saniye/);
-      if (match) return startLock(parseInt(match[1]));
+      if (loadingToastId) window.$toast.remove(loadingToastId)
+      const all = Object.values(errors || {}).join(' ')
+      const m = all.match(/(\d+)\s*saniye/)
+      if (m) return startLock(parseInt(m[1], 10))
 
-      if (errors.email && errors.email.includes('zaten alınmış'))
-        window.showToast('Bu e-posta adresi zaten kayıtlı ⚠️', 'error');
-      else if (Object.keys(errors).length)
-        Object.values(errors).forEach((msg) => window.showToast(msg, 'error'));
+      if (errors?.email && String(errors.email).toLowerCase().includes('unique'))
+        return window.showToast('Bu e-posta adresi zaten kayıtlı ⚠️', 'error')
+
+      if (Object.keys(errors || {}).length)
+        Object.values(errors).forEach((msg) => window.showToast(String(msg), 'error'))
       else
-        window.showToast('Kayıt başarısız oldu. Lütfen tekrar deneyin ❌', 'error');
+        window.showToast('Kayıt başarısız oldu. Lütfen tekrar deneyin ❌', 'error')
     },
     onFinish: () => {
-      if (loadingToastId) window.$toast.remove(loadingToastId);
-      form.reset();
+      if (loadingToastId) window.$toast.remove(loadingToastId)
+      form.reset('password', 'password_confirmation')
     },
-  });
+  })
 }
 </script>
 
