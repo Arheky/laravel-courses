@@ -30,7 +30,7 @@ Route::get('/', function () {
     ]);
 })->name('home');
 
-Route::get('/healthz', fn () => response('OK', 200));
+Route::get('/healthz', fn() => response()->json(['ok' => true], 200));
 
 // Auth rotaları
 require __DIR__ . '/auth.php';
