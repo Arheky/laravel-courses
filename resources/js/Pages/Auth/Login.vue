@@ -112,9 +112,18 @@ function submit() {
       })
     },
     onSuccess: () => {
-      if (loadingToastId) window.$toast.remove(loadingToastId)
-      window.showToast('Hoş geldin 👋 Başarıyla giriş yaptın!', 'success')
-    },
+     if (loadingToastId) window.$toast.remove(loadingToastId)
+       const props = usePage().props
+       const hasErrors = props?.errors && Object.keys(props.errors).length > 0
+       const isLoggedIn = !!props?.auth?.user
+       const stillOnLogin = route().current('login')
+     if (hasErrors || !isLoggedIn || stillOnLogin) {
+       window.showToast('Girdiğiniz e-posta adresi veya şifre hatalı ❌', 'error')
+       return
+     }
+
+     window.showToast('Hoş geldin 👋 Başarıyla giriş yaptın!', 'success')
+  },
     onError: (errors) => {
       if (loadingToastId) window.$toast.remove(loadingToastId)
       const msg = Object.values(errors).join(' ')
