@@ -163,6 +163,7 @@
 <script setup>
 import AdminLayout from '@/Layouts/AdminLayout.vue'
 import { Link, usePage } from '@inertiajs/vue3'
+import { watchDebounced } from '@vueuse/core'
 import { ref, watch, onMounted } from 'vue'
 import { courseStore } from '@/Stores/courseStore'
 import { paginationStore } from '@/Stores/paginationStore'
@@ -200,20 +201,21 @@ watch(
 )
 
 /* Arama */
-watch(search, (value) => {
-  inertiaGet(
-    route('admin.courses.index'),
-    { search: value },
-    {
-      preserveState: true,
-      replace: true,
-      onSuccess: (page) => {
-        courseStore.setCourses(page.props.courses?.data || [])
-        paginationStore.setLinks(page.props.courses?.links || [])
-      },
-    }
-  )
-})
+watchDebounced(
+  search,
+  (value) => {
+    router.get(
+      route('admin.courses.index'),
+      { search: value || undefined },
+      {
+        preserveState: true,
+        replace: true,
+        only: ['courses', 'filters'],
+      }
+    )
+  },
+  { debounce: 300, maxWait: 1000 }
+)
 
 /* Dersleri yükle */
 const loadLessons = async (course) => {
