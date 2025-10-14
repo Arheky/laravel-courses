@@ -103,6 +103,7 @@ import { watchDebounced } from '@vueuse/core'
 import { ref, watch, onMounted } from 'vue'
 import { inertiaGet, inertiaDelete } from '@/Helpers/inertiaActions'
 import { studentStore } from '@/Stores/studentStore'
+import { paginationStore } from '@/Stores/paginationStore'
 
 /* ------------------------------
  *  Props
