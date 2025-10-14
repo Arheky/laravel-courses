@@ -27,14 +27,12 @@ class StudentController extends Controller
             if ($terms->isNotEmpty()) {
                 $driver = DB::getDriverName();
                 $like = $driver === 'pgsql' ? 'ILIKE' : 'LIKE';
-    
                 $query->where(function ($outer) use ($terms, $like) {
                     foreach ($terms as $term) {
-                        $outer->where(function ($q) use ($term, $like) {
-                            $pattern = "%{$term}%";
-                            $q->where('title', $like, $pattern)
-                              ->orWhere('description', $like, $pattern)
-                              ->orWhere('instructor', $like, $pattern);
+                        $pattern = "%{$term}%";
+                        $outer->orWhere(function ($q) use ($pattern, $like) {
+                            $q->where('name',  $like, $pattern)
+                              ->orWhere('email', $like, $pattern);
                         });
                     }
                 });
