@@ -13,12 +13,12 @@ RUN if [ -f public/build/.vite/manifest.json ] && [ ! -f public/build/manifest.j
     fi
 
 # ---------- STAGE 2: BACKEND ----------
-FROM php:8.3-cli AS backend
+FROM php:8.3-fpm AS backend
 WORKDIR /var/www
 
 RUN apt-get update && apt-get install -y \
-    git curl unzip libpq-dev libzip-dev zip \
- && docker-php-ext-install pdo_pgsql pgsql zip bcmath
+    git curl unzip libpq-dev libzip-dev libonig-dev zip \
+ && docker-php-ext-install pdo_pgsql pgsql mbstring zip bcmath
 
 # Composer
 COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
@@ -37,4 +37,4 @@ HEALTHCHECK --interval=30s --timeout=5s --start-period=20s \
 
 CMD if [ -z "$APP_KEY" ]; then php artisan key:generate --force; fi && \
     php artisan optimize && \
-    php artisan serve --host=0.0.0.0 --port=${PORT}
+    php artisan serve --host=0.0.0.0 --port=10000
