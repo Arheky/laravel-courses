@@ -160,7 +160,8 @@ watchDebounced(
       }
     )
   },
-  { debounce: 300, maxWait: 800 }
+  { debounce: 300, maxWait: 800 },
+)
 </script>
 
 <style scoped>
