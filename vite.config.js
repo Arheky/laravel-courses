@@ -3,14 +3,15 @@ import laravel from 'laravel-vite-plugin'
 import vue from '@vitejs/plugin-vue'
 
 export default defineConfig(({ command, mode }) => {
-  const isProduction = mode === 'production'
+  const isProduction = command === 'build' || mode === 'production'
 
   return {
     plugins: [
       laravel({
         input: ['resources/css/app.css', 'resources/js/app.js'],
         refresh: true,
-        buildDirectory: 'build',
+        buildDirectory: 'build', // Render için build klasörünü sabitliyoruz
+        manifest: true,           // manifest.json oluşturulacak
       }),
       vue({
         template: {
@@ -22,12 +23,12 @@ export default defineConfig(({ command, mode }) => {
       }),
     ],
 
-    // Build ayarları
+    // 📦 Build ayarları
     build: {
-      manifest: true,
-      outDir: 'public/build',
-      emptyOutDir: true,
       target: ['es2022', 'chrome90'],
+      outDir: 'public/build',
+      manifest: true,
+      emptyOutDir: true,
       rollupOptions: {
         output: {
           chunkFileNames: 'js/[name]-[hash].js',
@@ -37,15 +38,15 @@ export default defineConfig(({ command, mode }) => {
       },
     },
 
-    // Server ayarları
+    // Server ayarları (local + Render uyumlu)
     server: {
       host: '0.0.0.0',
       port: 5173,
       strictPort: true,
       https: false,
       origin: isProduction
-        ? 'https://laravel-courses.onrender.com' // ✅ Render
-        : 'http://localhost:5173',               // 💻 Local
+        ? 'https://laravel-courses.onrender.com' // Render Production
+        : 'http://localhost:5173',               // Local Geliştirme
       hmr: {
         host: isProduction
           ? 'laravel-courses.onrender.com'
@@ -56,7 +57,7 @@ export default defineConfig(({ command, mode }) => {
       },
     },
 
-    // Base path (otomatik algıla)
-    base: isProduction ? '/' : '/',
+    // Base path — Render ve local için uyumlu
+    base: isProduction ? '/build/' : '/',
   }
 })
