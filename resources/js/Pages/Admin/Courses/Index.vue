@@ -173,7 +173,7 @@ import { inertiaDelete, inertiaGet } from '@/Helpers/inertiaActions'
 
 /* Inertia Props */
 const { props } = usePage()
-const search = ref('')
+const search = ref(props.filters?.search || '')
 
 /* State'ler */
 const showingLessons = ref(false)
@@ -205,16 +205,17 @@ watchDebounced(
   search,
   (val) => {
     const term = (val ?? '').trim()
-    const target = (typeof route === 'function' && route().has && route().has('admin.courses.index'))
-      ? route('admin.courses.index')
-      : '/admin/courses'
-    router.get(
-      target,
-      { search: term || undefined }, 
+    inertiaGet(
+      route('admin.courses.index'),
+      { search: term || undefined },
       {
         preserveState: true,
         replace: true,
         only: ['courses', 'filters'],
+        onSuccess: (page) => {
+          courseStore.setCourses(page.props.courses?.data || [])
+          paginationStore.setLinks(page.props.courses?.links || [])
+        },
       }
     )
   },
