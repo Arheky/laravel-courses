@@ -70,8 +70,9 @@
 </template>
 
 <script setup>
-import { Link, usePage } from '@inertiajs/vue3'
+import { Link, usePage, router } from '@inertiajs/vue3'
 import { ref, watch, onMounted } from 'vue'
+import { watchDebounced } from '@vueuse/core'
 import AdminLayout from '@/Layouts/AdminLayout.vue'
 import ConfirmModal from '@/Components/ConfirmModal.vue'
 import Pagination from '@/Components/Pagination.vue'
@@ -141,16 +142,21 @@ onMounted(() => {
 /**
  *  Arama güvenli şekilde
  */
-watch(search, (value) => {
-  inertiaGet(route('admin.students.index'), { search: value }, {
-    preserveState: true,
-    replace: true,
-    onSuccess: (page) => {
-      studentStore.setStudents(page.props.students?.data || [])
-      paginationStore.setLinks(page.props.students?.links || [])
-    },
-  })
-})
+watchDebounced(
+  search,
+  (value) => {
+    router.get(
+      route('admin.courses.index'),
+      { search: value || undefined },
+      {
+        preserveState: true,
+        replace: true,
+        only: ['courses', 'filters'],
+      }
+    )
+  },
+  { debounce: 300, maxWait: 1000 }
+)
 </script>
 
 <style scoped>
