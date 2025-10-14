@@ -2,13 +2,14 @@
 FROM node:20 AS frontend
 WORKDIR /app
 
+# lock dosyası olsa da olmasa da çalışır
 COPY package*.json ./
-RUN npm ci --legacy-peer-deps
+RUN npm install --legacy-peer-deps --no-audit --no-fund
 
 COPY . .
 RUN npm run build
 
-# Bazı ortamlar manifest'i .vite altına bırakabiliyor; fallback:
+# bazı ortamlarda manifest .vite altına düşüyor; fallback:
 RUN if [ -f public/build/.vite/manifest.json ] && [ ! -f public/build/manifest.json ]; then \
       cp public/build/.vite/manifest.json public/build/manifest.json; \
     fi
