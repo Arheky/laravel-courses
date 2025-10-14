@@ -163,6 +163,7 @@
 <script setup>
 import AdminLayout from '@/Layouts/AdminLayout.vue'
 import { Link, usePage, router } from '@inertiajs/vue3'
+import { Inertia } from '@inertiajs/inertia'
 import { watchDebounced } from '@vueuse/core'
 import { ref, watch, onMounted } from 'vue'
 import { courseStore } from '@/Stores/courseStore'
@@ -173,7 +174,7 @@ import { inertiaDelete, inertiaGet } from '@/Helpers/inertiaActions'
 
 /* Inertia Props */
 const { props } = usePage()
-const search = ref(props.filters?.search || '')
+const search = ref('')
 
 /* State'ler */
 const showingLessons = ref(false)
@@ -203,18 +204,18 @@ watch(
 /* Arama */
 watchDebounced(
   search,
-  (value) => {
-    router.get(
-      route('admin.courses.index'),
-      { search: value || undefined },
-      {
-        preserveState: true,
-        replace: true,
-        only: ['courses', 'filters'],
-      }
-    )
+  (val) => {
+    const term = (val ?? '').trim()
+    const to = (typeof route === 'function' && route().has && route().has('admin.courses.index'))
+      ? route('admin.courses.index', { search: term || undefined })
+      : (term ? `/admin/courses?search=${encodeURIComponent(term)}` : '/admin/courses')
+    Inertia.get(to, {}, {
+      preserveState: true,
+      replace: true,
+      only: ['courses', 'filters'],
+    })
   },
-  { debounce: 300, maxWait: 1000 }
+  { debounce: 300, maxWait: 800 }
 )
 
 /* Dersleri yükle */
