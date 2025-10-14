@@ -50,7 +50,7 @@ class MyCoursesController extends Controller
     
         // Sıralama
         $sort = $request->get('sort', 'desc');
-        $courses = $query->orderBy('courses.created_at', $sort)
+        $courses = $query->orderBy('created_at', $sort)
             ->paginate(9)
             ->withQueryString();
         return Inertia::render('Student/MyCourses/Index', [
