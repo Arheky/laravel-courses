@@ -29,6 +29,7 @@ class HandleInertiaRequests extends Middleware
             'flash' => [
                 'success' => fn () => $request->session()->get('success'),
                 'error' => fn () => $request->session()->get('error'),
+                'demo_reset_link' => fn () => $request->session()->get('demo_reset_link'),
             ],
             'csrf_token' => csrf_token(),
             'app' => [
