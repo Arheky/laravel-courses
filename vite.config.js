@@ -12,7 +12,6 @@ export default defineConfig({
     vue(),
   ],
   build: {
-    target: ['es2022', 'chrome90'],
     outDir: 'public/build',
     manifest: true,
     emptyOutDir: true,
@@ -29,5 +28,4 @@ export default defineConfig({
     port: 5173,
     strictPort: true,
   },
-    
 })
