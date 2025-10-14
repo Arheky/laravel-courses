@@ -1,7 +1,9 @@
 <?php
 
 namespace App\Http\Controllers\Admin;
+
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\StoreLessonRequest;
 use App\Http\Requests\UpdateLessonRequest;
@@ -20,18 +22,29 @@ class LessonController extends Controller
 
         // Arama filtresi (ders veya kurs adına göre)
         if ($raw = $request->string('search')->toString()) {
-            $search = trim($raw);
-            if ($search !== '') {
-                $like = DB::getDriverName() === 'pgsql' ? 'ILIKE' : 'LIKE';
-                $query->where(function ($q) use ($search, $like) {
-                    $q->where('title', $like, "%{$search}%")
-                      ->orWhere('description', $like, "%{$search}%")
-                      ->orWhere('instructor', $like, "%{$search}%");
+            $normalized = Str::of($raw)
+                ->lower()
+                ->replaceMatches('/[^\pL\pN\s]+/u', ' ')
+                ->squish();
+            $terms = collect(explode(' ', $normalized))->filter();
+            if ($terms->isNotEmpty()) {
+                $driver = DB::getDriverName();
+                $like = $driver === 'pgsql' ? 'ILIKE' : 'LIKE';
+    
+                $query->where(function ($outer) use ($terms, $like) {
+                    foreach ($terms as $term) {
+                        $outer->where(function ($q) use ($term, $like) {
+                            $pattern = "%{$term}%";
+                            $q->where('title', $like, $pattern)
+                              ->orWhere('description', $like, $pattern)
+                              ->orWhere('instructor', $like, $pattern);
+                        });
+                    }
                 });
             }
         }
 
-        $lessons = $query->latest()->paginate(8)->withQueryString();
+        $lessons = $query->orderByDesc('created_at')->paginate(6)->withQueryString();
         $courses = Course::select('id', 'title')->orderBy('title')->get();
 
         return Inertia::render('Admin/Lessons/Index', [
