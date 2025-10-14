@@ -101,7 +101,7 @@ import ConfirmModal from '@/Components/ConfirmModal.vue'
 import { Link, usePage, router } from '@inertiajs/vue3'
 import { watchDebounced } from '@vueuse/core'
 import { ref, watch, onMounted } from 'vue'
-import { inertiaDelete } from '@/Helpers/inertiaActions'
+import { inertiaGet, inertiaDelete } from '@/Helpers/inertiaActions'
 import { studentStore } from '@/Stores/studentStore'
 
 /* ------------------------------
