@@ -163,7 +163,6 @@
 <script setup>
 import AdminLayout from '@/Layouts/AdminLayout.vue'
 import { Link, usePage, router } from '@inertiajs/vue3'
-import { Inertia } from '@inertiajs/inertia'
 import { watchDebounced } from '@vueuse/core'
 import { ref, watch, onMounted } from 'vue'
 import { courseStore } from '@/Stores/courseStore'
@@ -206,14 +205,18 @@ watchDebounced(
   search,
   (val) => {
     const term = (val ?? '').trim()
-    const to = (typeof route === 'function' && route().has && route().has('admin.courses.index'))
-      ? route('admin.courses.index', { search: term || undefined })
-      : (term ? `/admin/courses?search=${encodeURIComponent(term)}` : '/admin/courses')
-    Inertia.get(to, {}, {
-      preserveState: true,
-      replace: true,
-      only: ['courses', 'filters'],
-    })
+    const target = (typeof route === 'function' && route().has && route().has('admin.courses.index'))
+      ? route('admin.courses.index')
+      : '/admin/courses'
+    router.get(
+      target,
+      { search: term || undefined }, 
+      {
+        preserveState: true,
+        replace: true,
+        only: ['courses', 'filters'],
+      }
+    )
   },
   { debounce: 300, maxWait: 800 }
 )
