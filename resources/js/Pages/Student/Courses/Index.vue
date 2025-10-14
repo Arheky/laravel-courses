@@ -114,6 +114,7 @@ import StudentLayout from '@/Layouts/StudentLayout.vue'
 import ConfirmModal from '@/Components/ConfirmModal.vue'
 import { Link, usePage } from '@inertiajs/vue3'
 import { ref, watch, onMounted } from 'vue'
+import { watchDebounced } from '@vueuse/core'
 import { inertiaGet, inertiaPost, inertiaDelete } from '@/Helpers/inertiaActions'
 import { studentStore } from '@/Stores/studentStore'
 import { paginationStore } from '@/Stores/paginationStore'
@@ -152,17 +153,28 @@ watch(() => page.props.courses, (val) => {
   paginationStore.setLinks(val.links || [])
 })
 
-watch(search, (value) => {
-  inertiaGet(route('student.courses.index'), { search: value }, {
-    preserveState: true,
-    replace: true,
-    onSuccess: (page) => {
-      studentStore.setCourses(page.props.courses?.data || [])
-      paginationStore.setLinks(page.props.courses?.links || [])
-      studentStore.setEnrolled(page.props.enrolledCourseIds || [])
-    },
-  })
-})
+// Arama (backend senkronize, debounced)
+watchDebounced(
+  search,
+  (val) => {
+    const term = (val ?? '').trim()
+    inertiaGet(
+      route('student.courses.index'),
+      { search: term || undefined, page: 1 },
+      {
+        preserveState: true,
+        replace: true,
+        only: ['courses', 'filters', 'enrolledCourseIds'],
+        onSuccess: (page) => {
+          studentStore.setCourses(page.props.courses?.data || [])
+          paginationStore.setLinks(page.props.courses?.links || [])
+          studentStore.setEnrolled(page.props.enrolledCourseIds || [])
+        },
+      }
+    )
+  },
+  { debounce: 300, maxWait: 800 }
+)
 
 /* ------------------------------
  *  Kursa Katıl
