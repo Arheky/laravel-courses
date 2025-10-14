@@ -4,7 +4,6 @@ import { createApp, h, reactive } from 'vue'
 import { createInertiaApp } from '@inertiajs/vue3'
 import { resolvePageComponent } from 'laravel-vite-plugin/inertia-helpers'
 import { ZiggyVue } from 'ziggy-js'
-import { Ziggy } from './ziggy'
 import AppLayout from './Layouts/AppLayout.vue'
 
 // Animasyonlar
@@ -111,7 +110,7 @@ createInertiaApp({
   setup({ el, App, props, plugin }) {
     const vueApp = createApp({ render: () => h(App, props) })
     vueApp.use(plugin)
-    vueApp.use(ZiggyVue, Ziggy)
+    vueApp.use(ZiggyVue)
     vueApp.use(MotionPlugin)
     vueApp.mount(el)
   },
