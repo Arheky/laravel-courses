@@ -19,13 +19,16 @@ class LessonController extends Controller
         $query = Lesson::with('course:id,title');
 
         // Arama filtresi (ders veya kurs adına göre)
-        if ($search = $request->get('search')) {
-            $query->where(function ($q) use ($search) {
-                $q->where('title', 'like', "%{$search}%")
-                ->orWhereHas('course', function ($courseQuery) use ($search) {
-                    $courseQuery->where('title', 'like', "%{$search}%");
+        if ($raw = $request->string('search')->toString()) {
+            $search = trim($raw);
+            if ($search !== '') {
+                $like = DB::getDriverName() === 'pgsql' ? 'ILIKE' : 'LIKE';
+                $query->where(function ($q) use ($search, $like) {
+                    $q->where('title', $like, "%{$search}%")
+                      ->orWhere('description', $like, "%{$search}%")
+                      ->orWhere('instructor', $like, "%{$search}%");
                 });
-            });
+            }
         }
 
         $lessons = $query->latest()->paginate(8)->withQueryString();
