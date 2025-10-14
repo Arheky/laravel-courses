@@ -1,19 +1,12 @@
 import axios from 'axios'
 
-axios.defaults.withCredentials = true
-axios.defaults.headers.common['X-Requested-With'] = 'XMLHttpRequest'
+window.axios = axios
 
-// 🌍 Ortama göre dinamik backend URL
-const baseURL =
-  import.meta.env.MODE === 'production'
-    ? 'https://laravel-courses.onrender.com' // Render domain
-    : 'http://localhost:8000' // Local geliştirme
+window.axios.defaults.withCredentials = true
+window.axios.defaults.headers.common['X-Requested-With'] = 'XMLHttpRequest'
 
-axios.defaults.baseURL = baseURL
+window.axios.defaults.baseURL = import.meta.env.PROD ? '' : 'http://localhost:8000'
 
-// 🔒 CSRF cookie otomatik ayarı
-axios
-  .get(`${baseURL}/sanctum/csrf-cookie`)
-  .catch(() => console.warn('⚠️ CSRF cookie alınamadı.'))
+window.axios.get('/sanctum/csrf-cookie').catch(() => console.warn('⚠️ CSRF cookie alınamadı.'))
 
-export default axios
+export default window.axios
