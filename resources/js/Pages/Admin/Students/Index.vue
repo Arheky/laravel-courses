@@ -152,7 +152,7 @@ watchDebounced(
       {
         preserveState: true,
         replace: true,
-        only: ['courses', 'filters'],
+        only: ['students', 'filters'],
         onSuccess: (page) => {
           studentStore.setStudents(page.props.students?.data || [])
           paginationStore.setLinks(page.props.students?.links || [])
