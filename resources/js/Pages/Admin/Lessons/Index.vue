@@ -109,7 +109,8 @@
 
 <script setup>
 import AdminLayout from '@/Layouts/AdminLayout.vue'
-import { Link, usePage } from '@inertiajs/vue3'
+import { Link, usePage, router } from '@inertiajs/vue3'
+import { watchDebounced } from '@vueuse/core'
 import { onMounted, ref, watch } from 'vue'
 import { lessonStore } from '@/Stores/lessonStore'
 import { paginationStore } from '@/Stores/paginationStore'
@@ -140,19 +141,21 @@ onMounted(() => {
 })
 
 //  Arama (backend senkronize)
-watch(search, (value) => {
-  const params = { search: value }
-  if (filters.course_id) params.course_id = filters.course_id
-
-  inertiaGet(route('admin.lessons.index'), params, {
-    preserveState: true,
-    replace: true,
-    onSuccess: (page) => {
-      lessonStore.setLessons(page.props.lessons?.data || [])
-      paginationStore.setLinks(page.props.lessons?.links || [])
-    },
-  })
-})
+watchDebounced(
+  search,
+  (value) => {
+    router.get(
+      route('admin.courses.index'),
+      { search: value || undefined },
+      {
+        preserveState: true,
+        replace: true,
+        only: ['courses', 'filters'],
+      }
+    )
+  },
+  { debounce: 300, maxWait: 1000 }
+)
 
 //  Silme işlemi için modal aç
 function confirmDelete(lesson) {
