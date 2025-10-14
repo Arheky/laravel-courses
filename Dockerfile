@@ -52,46 +52,42 @@ RUN ln -sf /dev/stdout /var/log/nginx/access.log \
  && ln -sf /dev/stderr /var/log/nginx/error.log
 
 # Basit bir Nginx conf template (PORT'u runtime'da envsubst ile dolduracağız)
-RUN mkdir -p /etc/nginx/conf.d
-RUN bash -lc 'cat > /etc/nginx/conf.d/default.conf.template << "EOF"
-server {
-    listen       ${PORT} default_server;
-    server_name  _;
-    root   /var/www/public;
-    index  index.php index.html;
-
-    # Health check
-    location = /healthz {
-        access_log off;
-        add_header Content-Type text/plain;
-        return 200 "ok";
-    }
-
-    # Statik dosyalar
-    location ~* \.(?:css|js|jpg|jpeg|gif|png|ico|svg|woff|woff2|ttf|map)$ {
-        expires 30d;
-        access_log off;
-        try_files $uri =404;
-    }
-
-    # Laravel
-    location / {
-        try_files $uri $uri/ /index.php?$query_string;
-    }
-
-    location ~ \.php$ {
-        include         fastcgi_params;
-        fastcgi_pass    127.0.0.1:9000;
-        fastcgi_param   SCRIPT_FILENAME $realpath_root$fastcgi_script_name;
-        fastcgi_param   DOCUMENT_ROOT $realpath_root;
-        fastcgi_read_timeout 60s;
-    }
-
-    client_max_body_size 10m;
-    sendfile on;
-    # gzip ayarlarını istersen ekleyebilirsin
-}
-EOF'
+RUN mkdir -p /etc/nginx/conf.d && \
+  printf '%s\n' \
+'server {' \
+'    listen       ${PORT} default_server;' \
+'    server_name  _;' \
+'    root   /var/www/public;' \
+'    index  index.php index.html;' \
+'' \
+'    location = /healthz {' \
+'        access_log off;' \
+'        add_header Content-Type text/plain;' \
+'        return 200 "ok";' \
+'    }' \
+'' \
+'    location ~* \.(?:css|js|jpg|jpeg|gif|png|ico|svg|woff|woff2|ttf|map)$ {' \
+'        expires 30d;' \
+'        access_log off;' \
+'        try_files $uri =404;' \
+'    }' \
+'' \
+'    location / {' \
+'        try_files $uri $uri/ /index.php?$query_string;' \
+'    }' \
+'' \
+'    location ~ \.php$ {' \
+'        include         fastcgi_params;' \
+'        fastcgi_pass    127.0.0.1:9000;' \
+'        fastcgi_param   SCRIPT_FILENAME $realpath_root$fastcgi_script_name;' \
+'        fastcgi_param   DOCUMENT_ROOT $realpath_root;' \
+'        fastcgi_read_timeout 60s;' \
+'    }' \
+'' \
+'    client_max_body_size 10m;' \
+'    sendfile on;' \
+'}' \
+> /etc/nginx/conf.d/default.conf.template
 
 # Start script: Nginx conf'u PORT ile üret, Laravel’i optimize et, servisleri foreground'da başlat
 RUN bash -lc 'cat > /usr/local/bin/start.sh << "EOF"
