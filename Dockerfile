@@ -27,6 +27,8 @@ RUN apt-get update && apt-get install -y \
 # 2️⃣ Composer'ı yükle
 COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
 
+WORKDIR /var/www
+
 # 3️⃣ Laravel kaynaklarını kopyala
 COPY . .
 
@@ -37,12 +39,9 @@ COPY --from=frontend /app/public/build ./public/build
 RUN composer install --no-dev --optimize-autoloader --no-interaction --prefer-dist
 
 # 6️⃣ Laravel cache ve optimize işlemleri
-RUN php artisan key:generate --force || true && \
-    php artisan config:clear || true && \
-    php artisan cache:clear || true && \
-    php artisan route:clear || true && \
-    php artisan view:clear || true && \
-    php artisan optimize || true
+RUN php artisan config:clear && \
+    php artisan route:clear && \
+    php artisan view:clear
 
 # 7️⃣ Render HTTP portunu aç
 EXPOSE 10000
