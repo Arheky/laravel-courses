@@ -13,44 +13,24 @@ class MyCoursesController extends Controller
 {
     public function index(Request $request)
     {
-        /** @var \App\Models\User|null $user */
         $user = Auth::user();
         if (! $user) {
             abort(403, 'Bu sayfayı görmek için giriş yapmalısınız.');
         }
     
-        // Kullanıcının kayıtlı olduğu kurslar
         $query = $user->courses()
-            ->withCount(['lessons', 'students'])
-            ->select('courses.*');
+            ->select('courses.*')
+            ->withCount(['lessons', 'students']);
+        $sort = in_array($request->query('sort'), ['asc','desc'], true)
+            ? $request->query('sort')
+            : 'desc';
     
-        // --- Arama filtresi
-        if ($raw = $request->string('search')->toString()) {
-            $normalized = Str::of($raw)
-                ->lower()
-                ->replaceMatches('/[^\pL\pN\s]+/u', ' ')
-                ->squish();
+        $orderCol = method_exists($query, 'qualifyColumn')
+            ? $query->qualifyColumn('created_at')
+            : (new \App\Models\Course)->getTable().'.created_at';
     
-            $terms = collect(explode(' ', $normalized))->filter();
-    
-            if ($terms->isNotEmpty()) {
-                $like = DB::getDriverName() === 'pgsql' ? 'ILIKE' : 'LIKE';
-                $query->where(function ($outer) use ($terms, $like) {
-                    foreach ($terms as $term) {
-                        $pattern = "%{$term}%";
-                        $outer->where(function ($q) use ($pattern, $like) {
-                            $q->where('courses.title', $like, $pattern)
-                              ->orWhere('courses.description', $like, $pattern)
-                              ->orWhere('courses.instructor', $like, $pattern);
-                        });
-                    }
-                });
-            }
-        }
-    
-        // Sıralama
-        $sort = $request->get('sort', 'desc');
-        $courses = $query->orderBy('created_at', $sort)
+        $courses = $query
+            ->orderBy($orderCol, $sort)
             ->paginate(9)
             ->withQueryString();
         return Inertia::render('Student/MyCourses/Index', [
