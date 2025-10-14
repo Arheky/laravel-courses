@@ -104,13 +104,7 @@
             </svg>
 
             <span>
-              {{
-                isLocked
-                  ? `Bekle (${lockSeconds})`
-                  : form.processing
-                  ? 'Kayıt Yapılıyor...'
-                  : '✨ Kayıt Ol'
-              }}
+              {{ isLocked ? `Bekle (${lockSeconds})` : form.processing ? 'Kayıt Yapılıyor...' : '✨ Kayıt Ol' }}
             </span>
           </button>
         </form>
@@ -124,7 +118,6 @@
             </Link>
           </p>
 
-          <!-- Ana sayfa butonu -->
           <Link
             :href="route('home')"
             class="inline-flex items-center justify-center gap-2 text-white bg-gradient-to-r from-blue-500 to-purple-500
@@ -139,9 +132,7 @@
         </div>
       </div>
 
-      <!-- Divider -->
       <div class="h-[2px] w-40 bg-gradient-to-r from-indigo-500 via-blue-400 to-purple-500 rounded-full opacity-60 mt-12"></div>
-
       <footer class="text-xs mt-8 text-gray-500 dark:text-gray-400">
         © 2025 LaravelCourses — Laravel 12 • Vue 3 • Inertia
       </footer>
@@ -156,7 +147,7 @@ import { ref, onMounted, onBeforeUnmount, nextTick } from 'vue'
 import lottie from 'lottie-web'
 import hourglassAnim from '@/Animations/hourglass.json'
 
-/* Rate limit ve form durumu */
+/* === State === */
 const isLocked = ref(false)
 const lockSeconds = ref(0)
 let timer = null
@@ -174,13 +165,12 @@ const form = useForm({
   password_confirmation: '',
 })
 
-/* CSRF cookie ve kilit devamlılığı */
+/* CSRF (varsa) ve kilit devamlılığı */
 onMounted(async () => {
   try {
     if (window.axios) {
       await window.axios.get('/sanctum/csrf-cookie', { withCredentials: true })
     }
-    // Kilit devamı
     const stored = localStorage.getItem('registerRateLimit')
     if (stored) {
       const data = JSON.parse(stored)
@@ -205,8 +195,11 @@ onBeforeUnmount(() => {
   }
 })
 
-/* Rate limiter kilidi başlat (toast tek seferlik) */
+/* === Rate limiter kilidi başlat (toast tek sefer) === */
 function startLock(seconds) {
+  // daha uzun bir kilit varken kısa süre ile override etme
+  if (isLocked.value && seconds <= lockSeconds.value) return
+
   clearInterval(timer)
   isLocked.value = true
   lockSeconds.value = seconds
@@ -237,10 +230,7 @@ function startLock(seconds) {
       isLocked.value = false
       toastShown = false
       localStorage.removeItem('registerRateLimit')
-      if (lottieInstance) {
-        lottieInstance.destroy()
-        lottieInstance = null
-      }
+      if (lottieInstance) { lottieInstance.destroy(); lottieInstance = null }
       window.showToast('Tekrar kayıt olabilirsiniz ✅', 'info')
     } else {
       localStorage.setItem('registerRateLimit', JSON.stringify({ until: Date.now() + lockSeconds.value * 1000 }))
@@ -248,15 +238,15 @@ function startLock(seconds) {
   }, 1000)
 }
 
-/* Form gönderimi */
+/* === Submit === */
 function submit() {
   if (isLocked.value)
     return window.showToast(`Lütfen ${lockSeconds.value} saniye bekleyin ⏳`, 'warning')
 
-  // Kurallar
+  // Basit validasyon (backend ile hizalı)
   const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/
   const nameRegex = /^[a-zA-ZığüşöçİĞÜŞÖÇ0-9\s]+$/
-  const passwordRegex = /^[a-zA-ZığüşöçİĞÜŞÖÇ0-9_*]+$/
+  const passwordRegex = /^[A-Za-z0-9_*]+$/ // backend ile aynı
 
   if (!form.name || !form.email || !form.password)
     return window.showToast('Tüm alanları doldurmalısın 🚫', 'warning')
@@ -295,6 +285,7 @@ function submit() {
     },
     onError: (errors) => {
       if (loadingToastId) window.$toast.remove(loadingToastId)
+
       const all = Object.values(errors || {}).join(' ')
       const m = all.match(/(\d+)\s*saniye/)
       if (m) return startLock(parseInt(m[1], 10))
@@ -303,7 +294,7 @@ function submit() {
         return window.showToast('Bu e-posta adresi zaten kayıtlı ⚠️', 'error')
 
       if (Object.keys(errors || {}).length)
-        Object.values(errors).forEach((msg) => window.showToast(String(msg), 'error'))
+        Object.values(errors).forEach(msg => window.showToast(String(msg), 'error'))
       else
         window.showToast('Kayıt başarısız oldu. Lütfen tekrar deneyin ❌', 'error')
     },
@@ -324,8 +315,5 @@ function submit() {
   @apply px-5 py-2.5 rounded-lg bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 
          text-white font-semibold shadow-md transition transform hover:scale-[1.03] disabled:opacity-70 disabled:cursor-not-allowed;
 }
-.lottie-hourglass {
-  width: 40px;
-  height: 40px;
-}
+.lottie-hourglass { width: 40px; height: 40px; }
 </style>
