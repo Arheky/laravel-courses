@@ -5,7 +5,7 @@ import { ref, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import lottie from 'lottie-web'
 import hourglassAnim from '@/Animations/hourglass.json'
 
-/* Kilit durumu */
+/* === State === */
 const isLocked = ref(false)
 const lockSeconds = ref(0)
 let timer = null
@@ -14,8 +14,6 @@ let lottieInstance = null
 const hourglassRef = ref(null)
 const page = usePage()
 const canResetPassword = page.props.canResetPassword ?? true
-
-/* Şifre görünürlüğü */
 const showPassword = ref(false)
 
 const form = useForm({
@@ -24,8 +22,8 @@ const form = useForm({
   remember: false,
 })
 
-/* Lottie kontrolü */
-watch(isLocked, async (locked) => {
+/* === Lottie hourglass === */
+watch(isLocked, async locked => {
   await nextTick()
   if (locked && hourglassRef.value) {
     if (lottieInstance) lottieInstance.destroy()
@@ -42,7 +40,9 @@ watch(isLocked, async (locked) => {
   }
 })
 
+/* === Start lock (toast’ı interceptor gösteriyor) === */
 function startLock(seconds) {
+  // aynı anda daha kısa bir süreyle resetlenmesin
   if (isLocked.value && seconds <= lockSeconds.value) return
 
   clearInterval(timer)
@@ -63,23 +63,17 @@ function startLock(seconds) {
   }, 1000)
 }
 
-const handleRateLimit = (e) => {
-  const secs = Number(e?.detail?.remaining) || 0
-  if (secs > 0 && (!isLocked.value || secs > lockSeconds.value)) {
-    startLock(secs)
-  }
-}
-
 /* Interceptor'dan gelen rate-limit olayını dinle */
 const handleRateLimit = (e) => {
   const secs = Number(e?.detail?.remaining) || 0
   if (secs > 0) startLock(secs)
 }
 
-/* Sayfa yenilense bile kalan süreyi koru + event bağla */
+/* === Mount / Unmount === */
 onMounted(() => {
   window.addEventListener('auth-rate-limit', handleRateLimit)
 
+  // mevcut kilidi sürdür
   const stored = localStorage.getItem('rateLimiter')
   if (stored) {
     const data = JSON.parse(stored)
@@ -99,20 +93,16 @@ onUnmounted(() => {
   if (lottieInstance) lottieInstance.destroy()
 })
 
-/* Giriş işlemi */
+/* === Submit === */
 function submit() {
   if (isLocked.value)
     return window.showToast(`Lütfen ${lockSeconds.value} saniye bekleyin ⏳`, 'warning')
 
   const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/
-  if (!form.email && !form.password)
-    return window.showToast('E-posta ve şifre boş bırakılamaz 🚫', 'warning')
-  if (!form.email)
-    return window.showToast('E-posta adresinizi girin 📧', 'warning')
-  if (!emailRegex.test(form.email))
-    return window.showToast('Geçerli bir e-posta adresi girin (örnek@site.com) 📮', 'warning')
-  if (!form.password)
-    return window.showToast('Şifrenizi girin 🔑', 'warning')
+  if (!form.email && !form.password) return window.showToast('E-posta ve şifre boş bırakılamaz 🚫', 'warning')
+  if (!form.email) return window.showToast('E-posta adresinizi girin 📧', 'warning')
+  if (!emailRegex.test(form.email)) return window.showToast('Geçerli bir e-posta adresi girin (örnek@site.com) 📮', 'warning')
+  if (!form.password) return window.showToast('Şifrenizi girin 🔑', 'warning')
 
   let loadingToastId = null
 
@@ -140,12 +130,14 @@ function submit() {
     },
     onError: (errors) => {
       if (loadingToastId) window.$toast.remove(loadingToastId)
-      const msg = Object.values(errors).join(' ')
-      const match = msg.match(/(\d+)\s*saniye/)
-      if (match) return startLock(parseInt(match[1]))
 
-      if (errors.email || errors.password)
-        Object.values(errors).forEach((m) => window.showToast(m, 'error'))
+      // 429 değilse backend doğrulama mesajından süre yakalamaya çalış
+      const msg = Object.values(errors || {}).join(' ')
+      const m = msg.match(/(\d+)\s*saniye/)
+      if (m) return startLock(parseInt(m[1], 10))
+
+      if (errors?.email || errors?.password)
+        Object.values(errors).forEach(m => window.showToast(String(m), 'error'))
       else
         window.showToast('Girdiğiniz e-posta adresi veya şifre hatalı ❌', 'error')
     },
@@ -254,42 +246,20 @@ function submit() {
               fill="none"
               viewBox="0 0 24 24"
             >
-              <circle
-                class="opacity-25"
-                cx="12"
-                cy="12"
-                r="10"
-                stroke="currentColor"
-                stroke-width="4"
-              />
-              <path
-                class="opacity-75"
-                fill="currentColor"
-                d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"
-              />
+              <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
+              <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
             </svg>
 
             <span class="text-base font-medium">
-              {{
-                isLocked
-                  ? `Bekle (${lockSeconds})`
-                  : form.processing
-                  ? 'Giriş Yapılıyor...'
-                  : '🚀 Giriş Yap'
-              }}
+              {{ isLocked ? `Bekle (${lockSeconds})` : form.processing ? 'Giriş Yapılıyor...' : '🚀 Giriş Yap' }}
             </span>
           </button>
 
           <!-- Alt bağlantılar -->
-          <div
-            class="text-center mt-6 text-sm text-gray-600 dark:text-gray-400 space-y-3"
-          >
+          <div class="text-center mt-6 text-sm text-gray-600 dark:text-gray-400 space-y-3">
             <p>
               Hesabın yok mu?
-              <Link
-                :href="route('register')"
-                class="text-indigo-600 hover:underline font-semibold"
-              >
+              <Link :href="route('register')" class="text-indigo-600 hover:underline font-semibold">
                 ✨ Kayıt Ol
               </Link>
             </p>
@@ -300,19 +270,8 @@ function submit() {
                      hover:from-blue-600 hover:to-purple-600 px-4 py-2 rounded-lg shadow-md transition-all
                      transform hover:scale-[1.05] hover:shadow-lg text-sm font-medium"
             >
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                class="h-4 w-4"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-                stroke-width="2"
-              >
-                <path
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                  d="M15 19l-7-7 7-7"
-                />
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7" />
               </svg>
               Ana Sayfaya Dön
             </Link>
