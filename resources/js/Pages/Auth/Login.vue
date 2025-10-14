@@ -42,8 +42,9 @@ watch(isLocked, async (locked) => {
   }
 })
 
-/* Kilidi başlat (uyarı tostu YOK; uyarıyı interceptor gösteriyor) */
 function startLock(seconds) {
+  if (isLocked.value && seconds <= lockSeconds.value) return
+
   clearInterval(timer)
   isLocked.value = true
   lockSeconds.value = seconds
@@ -60,6 +61,13 @@ function startLock(seconds) {
       localStorage.setItem('rateLimiter', JSON.stringify({ until: Date.now() + lockSeconds.value * 1000 }))
     }
   }, 1000)
+}
+
+const handleRateLimit = (e) => {
+  const secs = Number(e?.detail?.remaining) || 0
+  if (secs > 0 && (!isLocked.value || secs > lockSeconds.value)) {
+    startLock(secs)
+  }
 }
 
 /* Interceptor'dan gelen rate-limit olayını dinle */
