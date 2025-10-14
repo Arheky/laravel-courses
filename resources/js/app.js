@@ -121,13 +121,8 @@ createInertiaApp({
   },
 })
 
-// Gereksiz 404 hatalarını bastır (örneğin Vite asset hataları)
-window.addEventListener('error', (e) => {
-  if (
-    e.target.tagName === 'SCRIPT' ||
-    e.target.tagName === 'LINK' ||
-    e.target.tagName === 'IMG'
-  ) {
-    e.preventDefault()
-  }
-}, true)
+if (import.meta.env.DEV) {
+  window.addEventListener('error', (e) => {
+    if (['SCRIPT','LINK','IMG'].includes(e.target.tagName)) e.preventDefault()
+  }, true)
+}
