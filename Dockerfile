@@ -20,7 +20,12 @@ WORKDIR /var/www
 RUN apt-get update && apt-get install -y \
     nginx gettext-base git curl unzip libpq-dev libzip-dev libonig-dev zip \
  && docker-php-ext-install pdo_pgsql pgsql mbstring zip bcmath \
- && rm -rf /var/lib/apt/lists/*
+ && rm -rf /var/lib/apt/lists/* \
+ # default site ve conf'ları temizle (80'i kapat)
+ && rm -f /etc/nginx/sites-enabled/default /etc/nginx/conf.d/default.conf || true
+
+# php-fpm 9000'i sadece localhost'ta dinlesin
+RUN sed -ri 's|^listen\s*=.*$|listen = 127.0.0.1:9000|' /usr/local/etc/php-fpm.d/www.conf
 
 # Composer
 COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
@@ -42,6 +47,8 @@ RUN mkdir -p /etc/nginx/conf.d && \
 'server {' \
 '  listen ${PORT} default_server;' \
 '  server_name _;' \
+'  client_header_buffer_size 16k;' \
+'  large_client_header_buffers 4 32k;' \
 '  root /var/www/public;' \
 '  index index.php index.html;' \
 '' \
@@ -54,26 +61,31 @@ RUN mkdir -p /etc/nginx/conf.d && \
 '    fastcgi_pass 127.0.0.1:9000;' \
 '    fastcgi_param SCRIPT_FILENAME $realpath_root$fastcgi_script_name;' \
 '    fastcgi_param DOCUMENT_ROOT $realpath_root;' \
+'    fastcgi_buffers 16 16k;' \
+'    fastcgi_buffer_size 32k;' \
 '  }' \
 '}' \
 > /etc/nginx/conf.d/default.conf.template
 
-# Start script (heredoc YOK – printf ile yazılıyor)
+# Başlatma scripti
 RUN printf '%s\n' \
 '#!/usr/bin/env bash' \
 'set -euo pipefail' \
 '' \
 ': "${PORT:=10000}"' \
-'# Laravel optimize (hata olsa da düşürme)' \
+'# Laravel optimize (hata olsa da düşmesin)' \
 'php artisan optimize || true' \
 '' \
 '# PORT değişkenini Nginx conf’a bas' \
 'envsubst '\''$PORT'\'' < /etc/nginx/conf.d/default.conf.template > /etc/nginx/conf.d/default.conf' \
 '' \
-'# PHP-FPM ve Nginx' \
+'# Servisleri başlat' \
 'php-fpm -D' \
 'nginx -g "daemon off;"' \
 > /usr/local/bin/start.sh && chmod +x /usr/local/bin/start.sh
+
+# Lokal için varsayılan PORT
+ENV PORT=10000
 
 EXPOSE 10000
 
