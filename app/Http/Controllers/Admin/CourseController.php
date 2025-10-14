@@ -1,7 +1,7 @@
 <?php
 
 namespace App\Http\Controllers\Admin;
-
+use Illuminate\Support\Facades\DB;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\StoreCourseRequest;
 use App\Http\Requests\UpdateCourseRequest;
@@ -21,12 +21,16 @@ class CourseController extends Controller
         $query = Course::withCount(['students', 'lessons']);
 
         // Arama filtresi
-        if ($search = $request->get('search')) {
-            $query->where(function ($q) use ($search) {
-                $q->where('title', 'like', "%{$search}%")
-                ->orWhere('description', 'like', "%{$search}%")
-                ->orWhere('instructor', 'like', "%{$search}%");
-            });
+        if ($raw = $request->string('search')->toString()) {
+            $search = trim($raw);
+            if ($search !== '') {
+                $like = DB::getDriverName() === 'pgsql' ? 'ILIKE' : 'LIKE';
+                $query->where(function ($q) use ($search, $like) {
+                    $q->where('title', $like, "%{$search}%")
+                      ->orWhere('description', $like, "%{$search}%")
+                      ->orWhere('instructor', $like, "%{$search}%");
+                });
+            }
         }
 
         $courses = $query->latest()->paginate(6)->withQueryString();
