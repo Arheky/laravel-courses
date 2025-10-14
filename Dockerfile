@@ -14,35 +14,33 @@ RUN if [ -f public/build/.vite/manifest.json ] && [ ! -f public/build/manifest.j
     fi
 
 # ---------- STAGE 2: BACKEND ----------
-FROM php:8.3-fpm AS backend
+FROM php:8.3-cli AS backend
 WORKDIR /var/www
 
 RUN apt-get update && apt-get install -y \
-    git curl unzip libpq-dev libzip-dev libonig-dev zip \
- && docker-php-ext-install pdo_pgsql pgsql mbstring zip bcmath
+    git curl unzip libpq-dev libzip-dev zip \
+ && docker-php-ext-install pdo_pgsql pgsql zip bcmath
 
+# Composer
 COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
 
-# Uygulama kaynakları
+# Uygulama kaynakları ve derlenmiş frontend
 COPY . .
-# Frontend çıktısını kopyala (manifest dahil)
 COPY --from=frontend /app/public/build ./public/build
 
-RUN composer install --no-dev --optimize-autoloader --no-interaction --prefer-dist
+# PHP bağımlılıkları
+RUN composer install --no-dev --optimize-autoloader --no-interaction --prefer-dist \
+ && php artisan config:clear && php artisan route:clear && php artisan view:clear \
+ && chmod -R 775 storage bootstrap/cache
 
-# Sadece temizlik + izinler
-RUN php artisan config:clear && \
-    php artisan route:clear && \
-    php artisan view:clear && \
-    chmod -R 775 storage bootstrap/cache
-
+# Render PORT'u runtime'da verir; burada sadece dokümantatif.
 EXPOSE 10000
 
-# Runtime'da son optimizasyon ve serve
+# Container içi healthcheck (Render'ın dış healthcheck'ine ek destek)
+HEALTHCHECK --interval=30s --timeout=5s --start-period=20s \
+  CMD curl -fsS http://127.0.0.1:${PORT}/healthz || exit 1
+
+# Uygulamayı Render'ın verdiği PORT'ta başlat
 CMD if [ -z "$APP_KEY" ]; then php artisan key:generate --force; fi && \
-    php artisan config:clear && \
-    php artisan cache:clear && \
-    php artisan route:clear && \
-    php artisan view:clear && \
     php artisan optimize && \
-    php artisan serve --host=0.0.0.0 --port=10000
+    php artisan serve --host=0.0.0.0 --port=${PORT}
