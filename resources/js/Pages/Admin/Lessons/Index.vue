@@ -143,20 +143,24 @@ onMounted(() => {
 //  Arama (backend senkronize)
 watchDebounced(
   search,
-  (value) => {
-    router.get(
+  (val) => {
+    const term = (val ?? '').trim()
+    inertiaGet(
       route('admin.courses.index'),
-      { search: value || undefined },
+      { search: term || undefined },
       {
         preserveState: true,
         replace: true,
         only: ['courses', 'filters'],
+        onSuccess: (page) => {
+          courseStore.setCourses(page.props.courses?.data || [])
+          paginationStore.setLinks(page.props.courses?.links || [])
+        },
       }
     )
   },
-  { debounce: 300, maxWait: 1000 }
+  { debounce: 300, maxWait: 800 }
 )
-
 //  Silme işlemi için modal aç
 function confirmDelete(lesson) {
   confirm.value = {
