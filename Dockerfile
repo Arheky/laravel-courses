@@ -11,7 +11,8 @@ RUN npm install --legacy-peer-deps
 # 3️⃣ Kaynak kodu kopyala
 COPY . .
 
-# 4️⃣ Frontend'i derle (Vite)
+# 4️⃣ Vite build işlemini çalıştır
+#    Çıktı public/build içinde oluşturulacak
 RUN npm run build
 
 
@@ -27,18 +28,18 @@ RUN apt-get update && apt-get install -y \
 # 2️⃣ Composer'ı yükle
 COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
 
-WORKDIR /var/www
-
-# 3️⃣ Laravel kaynaklarını kopyala
+# 3️⃣ Laravel dosyalarını kopyala
 COPY . .
 
-# 4️⃣ Frontend build çıktısını public'e taşı
+# 4️⃣ ✅ Frontend build çıktısını doğru yere kopyala
+#    (önceki versiyonlarda bu eksikti)
 COPY --from=frontend /app/public/build ./public/build
+COPY --from=frontend /app/public/build/manifest.json ./public/build/manifest.json
 
 # 5️⃣ PHP bağımlılıklarını kur
 RUN composer install --no-dev --optimize-autoloader --no-interaction --prefer-dist
 
-# 6️⃣ Laravel cache ve optimize işlemlerini runtime'da çalıştırmak için build'te sadece temizleme yapıyoruz
+# 6️⃣ Laravel cache temizliği + izin düzeltmesi
 RUN php artisan config:clear && \
     php artisan route:clear && \
     php artisan view:clear && \
@@ -47,12 +48,13 @@ RUN php artisan config:clear && \
 # 7️⃣ Render HTTP portunu aç
 EXPOSE 10000
 
-# 8️⃣ Laravel uygulamasını başlat (runtime aşamasında APP_KEY kontrolü + optimize)
+# 8️⃣ Runtime aşamasında APP_KEY ve optimize işlemleri
 CMD if [ -z "$APP_KEY" ]; then \
-      echo "⚠️  APP_KEY bulunamadı, yeni anahtar oluşturuluyor..."; \
+      echo "⚠️ APP_KEY bulunamadı, yeni anahtar oluşturuluyor..."; \
       php artisan key:generate --force; \
     fi && \
     echo "🚀 Laravel optimize ediliyor..." && \
+    rm -f bootstrap/cache/config.php && \
     php artisan config:clear && \
     php artisan cache:clear && \
     php artisan route:clear && \
