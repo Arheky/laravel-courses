@@ -76,4 +76,14 @@ class User extends Authenticatable
         return $this->role === 'student';
     }
     
+    public function sendPasswordResetNotification($token)
+    {
+        $url = url(route('password.reset', ['token' => $token], false))
+             . '?email=' . urlencode($this->getEmailForPasswordReset());
+        if (config('app.expose_reset_link')) {
+            request()->session()->flash('demo_reset_link', $url);
+        }
+        $this->notify(new ResetPassword($token));
+    }
+    
 }
