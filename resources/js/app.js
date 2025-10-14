@@ -54,36 +54,40 @@ window.showToast = (message, type = 'info', options = {}) => {
 
 // Rate limit interceptor (429 durumunu yakala)
 window.axios.interceptors.response.use(
-  (response) => response,
+  (r) => r,
   (error) => {
     if (error.response && error.response.status === 429) {
-      const msg = error.response.data.errors?.email?.[0] || 'Çok fazla hatalı giriş denemesi!'
-      const match = msg.match(/(\d+)\s*saniye/)
-      if (match) {
-        // Global rate limit başlat
-        window.appState.rateRemaining = parseInt(match[1])
+      const data = error.response.data || {}
+      let remaining =
+        typeof data.retry_after === 'number'
+          ? data.retry_after
+          : (() => {
+              const msg = data.message || data.errors?.email?.[0] || ''
+              const m = msg.match(/(\d+)\s*saniye/)
+              return m ? parseInt(m[1], 10) : null
+            })()
+      if (remaining && remaining > 0) {
+        window.appState.rateRemaining = remaining
         window.appState.rateLimited = true
 
-        // Önceden varsa temizle
         if (window.appState.rateTimer) clearInterval(window.appState.rateTimer)
         toast.dismiss()
 
-        const toastId = toast.warning(
-          `Çok fazla hatalı giriş denemesi! ${window.appState.rateRemaining} saniye bekleyin ⏳`,
+        const id = toast.warning(
+          `Çok fazla hatalı giriş denemesi! ${remaining} saniye bekleyin ⏳`,
           { position: 'top-center', autoClose: false }
         )
 
-        // Geri sayım başlat
         window.appState.rateTimer = setInterval(() => {
           window.appState.rateRemaining--
           if (window.appState.rateRemaining > 0) {
-            toast.update(toastId, {
+            toast.update(id, {
               render: `Çok fazla hatalı giriş denemesi! ${window.appState.rateRemaining} saniye bekleyin ⏳`,
             })
           } else {
             clearInterval(window.appState.rateTimer)
             window.appState.rateLimited = false
-            toast.dismiss(toastId)
+            toast.dismiss(id)
             toast.info('Tekrar giriş yapabilirsiniz ✅')
           }
         }, 1000)
