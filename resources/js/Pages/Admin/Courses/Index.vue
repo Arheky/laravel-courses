@@ -162,7 +162,7 @@
 
 <script setup>
 import AdminLayout from '@/Layouts/AdminLayout.vue'
-import { Link, usePage } from '@inertiajs/vue3'
+import { Link, usePage, router } from '@inertiajs/vue3'
 import { watchDebounced } from '@vueuse/core'
 import { ref, watch, onMounted } from 'vue'
 import { courseStore } from '@/Stores/courseStore'
