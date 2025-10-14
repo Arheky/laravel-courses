@@ -7,6 +7,7 @@ use App\Models\User;
 use Inertia\Inertia;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 
 class StudentController extends Controller
 {
@@ -18,17 +19,27 @@ class StudentController extends Controller
 
         // Arama filtresi
         if ($raw = $request->string('search')->toString()) {
-            $search = trim($raw);
-            if ($search !== '') {
-                $like = DB::getDriverName() === 'pgsql' ? 'ILIKE' : 'LIKE';
-                $query->where(function ($q) use ($search, $like) {
-                    $q->where('title', $like, "%{$search}%")
-                      ->orWhere('description', $like, "%{$search}%")
-                      ->orWhere('instructor', $like, "%{$search}%");
+            $normalized = Str::of($raw)
+                ->lower()
+                ->replaceMatches('/[^\pL\pN\s]+/u', ' ')
+                ->squish();
+            $terms = collect(explode(' ', $normalized))->filter();
+            if ($terms->isNotEmpty()) {
+                $driver = DB::getDriverName();
+                $like = $driver === 'pgsql' ? 'ILIKE' : 'LIKE';
+    
+                $query->where(function ($outer) use ($terms, $like) {
+                    foreach ($terms as $term) {
+                        $outer->where(function ($q) use ($term, $like) {
+                            $pattern = "%{$term}%";
+                            $q->where('title', $like, $pattern)
+                              ->orWhere('description', $like, $pattern)
+                              ->orWhere('instructor', $like, $pattern);
+                        });
+                    }
                 });
             }
         }
-
         $students = $query->latest()->paginate(10)->withQueryString();
 
         return Inertia::render('Admin/Students/Index', [
