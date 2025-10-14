@@ -16,11 +16,16 @@ class StudentController extends Controller
         $query = User::where('role', 'student');
 
         // Arama filtresi
-        if ($search = $request->get('search')) {
-            $query->where(function ($q) use ($search) {
-                $q->where('name', 'like', "%{$search}%")
-                  ->orWhere('email', 'like', "%{$search}%");
-            });
+        if ($raw = $request->string('search')->toString()) {
+            $search = trim($raw);
+            if ($search !== '') {
+                $like = DB::getDriverName() === 'pgsql' ? 'ILIKE' : 'LIKE';
+                $query->where(function ($q) use ($search, $like) {
+                    $q->where('title', $like, "%{$search}%")
+                      ->orWhere('description', $like, "%{$search}%")
+                      ->orWhere('instructor', $like, "%{$search}%");
+                });
+            }
         }
 
         $students = $query->latest()->paginate(10)->withQueryString();
