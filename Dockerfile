@@ -3,7 +3,7 @@ FROM node:20 AS frontend
 WORKDIR /app
 
 COPY package*.json ./
-RUN npm install --legacy-peer-deps
+RUN npm ci --legacy-peer-deps
 
 COPY . .
 RUN npm run build
@@ -14,33 +14,43 @@ RUN if [ -f public/build/.vite/manifest.json ] && [ ! -f public/build/manifest.j
     fi
 
 # ---------- STAGE 2: BACKEND ----------
-FROM php:8.3-cli AS backend
+FROM php:8.3-cli AS app
 WORKDIR /var/www
 
+# Sistem paketleri ve PHP eklentileri
 RUN apt-get update && apt-get install -y \
-    git curl unzip libpq-dev libzip-dev zip \
- && docker-php-ext-install pdo_pgsql pgsql zip bcmath
+    git curl unzip libpq-dev libzip-dev libonig-dev zip \
+ && docker-php-ext-install pdo_pgsql pgsql mbstring zip bcmath opcache \
+ && rm -rf /var/lib/apt/lists/*
 
 # Composer
 COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
 
-# Uygulama kaynakları ve derlenmiş frontend
+# Composer cache katmanı için önce composer dosyaları
+COPY composer.json composer.lock ./
+RUN composer install --no-dev --prefer-dist --no-interaction --no-progress --no-scripts
+
+# Uygulama dosyaları
 COPY . .
+
+# Frontend çıktısı
 COPY --from=frontend /app/public/build ./public/build
 
-# PHP bağımlılıkları
-RUN composer install --no-dev --optimize-autoloader --no-interaction --prefer-dist \
- && php artisan config:clear && php artisan route:clear && php artisan view:clear \
- && chmod -R 775 storage bootstrap/cache
+# Laravel optimize + izinler
+RUN php artisan config:clear && \
+    php artisan route:clear && \
+    php artisan view:clear && \
+    php artisan storage:link || true && \
+    chmod -R 775 storage bootstrap/cache && \
+    composer install --no-dev --optimize-autoloader --no-interaction
 
-# Render PORT'u runtime'da verir; burada sadece dokümantatif.
-EXPOSE 10000
-
-# Container içi healthcheck (Render'ın dış healthcheck'ine ek destek)
-HEALTHCHECK --interval=30s --timeout=5s --start-period=20s \
+# Healthcheck (container içinden)
+HEALTHCHECK --interval=30s --timeout=3s \
   CMD curl -fsS http://127.0.0.1:${PORT}/healthz || exit 1
 
-# Uygulamayı Render'ın verdiği PORT'ta başlat
+EXPOSE 10000
+
+# Uygulamayı başlat
 CMD if [ -z "$APP_KEY" ]; then php artisan key:generate --force; fi && \
     php artisan optimize && \
     php artisan serve --host=0.0.0.0 --port=${PORT}
