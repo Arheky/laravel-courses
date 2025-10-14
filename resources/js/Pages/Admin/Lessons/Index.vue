@@ -146,15 +146,15 @@ watchDebounced(
   (val) => {
     const term = (val ?? '').trim()
     inertiaGet(
-      route('admin.courses.index'),
+      route('admin.lessons.index'),
       { search: term || undefined },
       {
         preserveState: true,
         replace: true,
         only: ['courses', 'filters'],
         onSuccess: (page) => {
-          courseStore.setCourses(page.props.courses?.data || [])
-          paginationStore.setLinks(page.props.courses?.links || [])
+          lessonStore.setLessons(page.props.lessons?.data || [])
+          paginationStore.setLinks(page.props.lessons?.links || [])
         },
       }
     )
