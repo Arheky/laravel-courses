@@ -144,19 +144,23 @@ onMounted(() => {
  */
 watchDebounced(
   search,
-  (value) => {
-    router.get(
-      route('admin.courses.index'),
-      { search: value || undefined },
+  (val) => {
+    const term = (val ?? '').trim()
+    inertiaGet(
+      route('admin.students.index'),
+      { search: term || undefined },
       {
         preserveState: true,
         replace: true,
         only: ['courses', 'filters'],
+        onSuccess: (page) => {
+          studentStore.setStudents(page.props.students?.data || [])
+          paginationStore.setLinks(page.props.students?.links || [])
+        },
       }
     )
   },
-  { debounce: 300, maxWait: 1000 }
-)
+  { debounce: 300, maxWait: 800 }
 </script>
 
 <style scoped>
