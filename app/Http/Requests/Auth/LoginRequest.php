@@ -38,6 +38,8 @@ class LoginRequest extends FormRequest
         if (! Auth::attempt($this->only('email','password'), $this->boolean('remember'))) {
             RateLimiter::hit($this->throttleKey(), self::ATTEMPT_DECAY_SECONDS);
             if (RateLimiter::tooManyAttempts($this->throttleKey(), self::MAX_ATTEMPTS_PER_STAGE)) {
+                event(new Lockout($this));
+
                 $stage    = (int) Cache::get($this->stageKey(), 1);
                 $cooldown = $this->cooldownForStage($stage);
 
@@ -69,8 +71,7 @@ class LoginRequest extends FormRequest
     {
         $msg = "Çok fazla hatalı giriş denemesi! {$seconds} saniye bekleyin ⏳";
         session()->flash('retry_after', $seconds);
-
-        if ($this->headers->has('X-Inertia')) {
+        if ($this->headers->has('X-Inertia') || ! $this->expectsJson()) {
             throw new HttpResponseException(
                 back()
                     ->withErrors(['email' => $msg])
@@ -78,20 +79,13 @@ class LoginRequest extends FormRequest
                     ->setStatusCode(303)
             );
         }
-
-        if ($this->expectsJson()) {
-            throw new HttpResponseException(
-                response()->json([
-                    'message'     => $msg,
-                    'retry_after' => $seconds,
-                    'errors'      => ['email' => [$msg]],
-                ], 429)
-            );
-        }
-
-        $e = ValidationException::withMessages(['email' => $msg]);
-        $e->status = 429;
-        throw $e;
+        throw new HttpResponseException(
+            response()->json([
+                'message'     => $msg,
+                'retry_after' => $seconds,
+                'errors'      => ['email' => [$msg]],
+            ], 429)
+        );
     }
 
     protected function cooldownForStage(int $stage): int
@@ -99,9 +93,10 @@ class LoginRequest extends FormRequest
         $seconds = self::BASE_COOLDOWN_SECONDS * (2 ** max(0, $stage - 1));
         return min($seconds, self::COOLDOWN_CAP_SECONDS);
     }
+
     public function throttleKey(): string
     {
-        return 'login:' . Str::lower($this->string('email')->toString()) . '|' . $this->ip();
+        return 'login:' . Str::lower((string) $this->input('email')) . '|' . $this->ip();
     }
 
     protected function blockKey(): string { return 'login_blocked:' . $this->throttleKey(); }
