@@ -3,7 +3,6 @@
 namespace App\Http\Requests\Auth;
 
 use Illuminate\Auth\Events\Lockout;
-use Illuminate\Contracts\Validation\Validator;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Http\Exceptions\HttpResponseException;
 use Illuminate\Support\Facades\Auth;
@@ -14,17 +13,12 @@ use Illuminate\Validation\ValidationException;
 
 class LoginRequest extends FormRequest
 {
-    const MAX_ATTEMPTS_PER_STAGE = 5;
-    const ATTEMPT_DECAY_SECONDS  = 60;
-    const BASE_COOLDOWN_SECONDS  = 300;
-    const COOLDOWN_CAP_SECONDS   = 3600;
-    const STAGE_TTL_HOURS        = 12;
-
-    public function authorize(): bool
-    {
-        return true;
-    }
-
+    private const MAX_ATTEMPTS_PER_STAGE = 5;
+    private const ATTEMPT_DECAY_SECONDS  = 300;
+    private const BASE_COOLDOWN_SECONDS  = 300;
+    private const COOLDOWN_CAP_SECONDS   = 3600;
+    private const STAGE_TTL_HOURS        = 12;
+    public function authorize(): bool { return true; }
     public function rules(): array
     {
         return [
@@ -37,23 +31,17 @@ class LoginRequest extends FormRequest
     public function authenticate(): void
     {
         $this->ensureIsNotRateLimited();
-
         if (! Auth::attempt($this->only('email','password'), $this->boolean('remember'))) {
             RateLimiter::hit($this->throttleKey(), self::ATTEMPT_DECAY_SECONDS);
             if (RateLimiter::tooManyAttempts($this->throttleKey(), self::MAX_ATTEMPTS_PER_STAGE)) {
                 event(new Lockout($this));
-
                 $stage    = (int) Cache::get($this->stageKey(), 1);
                 $cooldown = $this->cooldownForStage($stage);
-
                 Cache::put($this->blockKey(), now()->addSeconds($cooldown)->timestamp, $cooldown);
                 Cache::put($this->stageKey(), $stage + 1, now()->addHours(self::STAGE_TTL_HOURS));
-
                 RateLimiter::clear($this->throttleKey());
-
                 $this->throwRateLimited($cooldown);
             }
-
             throw ValidationException::withMessages([
                 'email' => 'Girdiğiniz e-posta adresi veya şifre hatalı ❌',
             ]);
@@ -65,10 +53,10 @@ class LoginRequest extends FormRequest
 
     public function ensureIsNotRateLimited(): void
     {
-        if (Cache::has($this->blockKey())) {
-            $remaining = max(Cache::get($this->blockKey()) - now()->timestamp, 1);
-            $this->throwRateLimited($remaining);
-        }
+        if (! Cache::has($this->blockKey())) return;
+
+        $remaining = max((int)Cache::get($this->blockKey()) - now()->timestamp, 1);
+        $this->throwRateLimited($remaining);
     }
 
     protected function throwRateLimited(int $seconds): void
@@ -83,15 +71,15 @@ class LoginRequest extends FormRequest
             );
         }
         if ($this->expectsJson()) {
-            throw new HttpResponseException(
-                response()->json([
-                    'message'     => $msg,
-                    'retry_after' => $seconds,
-                    'errors'      => ['email' => [$msg]],
-                ], 429)
-            );
+            throw new HttpResponseException(response()->json([
+                'message'     => $msg,
+                'retry_after' => $seconds,
+                'errors'      => ['email' => [$msg]],
+            ], 429));
         }
-        throw ValidationException::withMessages(['email' => $msg]);
+        $e = ValidationException::withMessages(['email' => $msg]);
+        $e->status = 429;
+        throw $e;
     }
 
     protected function cooldownForStage(int $stage): int
@@ -99,19 +87,13 @@ class LoginRequest extends FormRequest
         $seconds = self::BASE_COOLDOWN_SECONDS * (2 ** max(0, $stage - 1));
         return min($seconds, self::COOLDOWN_CAP_SECONDS);
     }
-
     public function throttleKey(): string
     {
-        return 'login:' . Str::lower((string) $this->input('email')) . '|' . $this->ip();
+        $email = Str::lower((string) $this->input('email'));
+        $ua    = md5((string) $this->header('User-Agent'));
+        return "login:{$email}|ua:{$ua}";
     }
 
-    protected function blockKey(): string
-    {
-        return 'login_blocked:' . $this->throttleKey();
-    }
-
-    protected function stageKey(): string
-    {
-        return 'login_stage:' . $this->throttleKey();
-    }
+    protected function blockKey(): string  { return 'login_blocked:' . $this->throttleKey(); }
+    protected function stageKey(): string  { return 'login_stage:'  . $this->throttleKey(); }
 }
