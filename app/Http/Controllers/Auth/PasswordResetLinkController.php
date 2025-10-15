@@ -28,59 +28,35 @@ class PasswordResetLinkController extends Controller
     }
 
 
-    // Şifre sıfırlama link isteğini işler.
-
-    public function store(Request $request): RedirectResponse
+    public function store(Request $request)
     {
-        $request->validate([
-            'email' => ['required', 'email'],
-        ]);
+        $request->validate(['email' => ['required', 'email']]);
+        $status = Password::sendResetLink($request->only('email'));
 
-        // Rate limiter kontrolü
-        $this->ensureIsNotRateLimited($request);
+        $demoLink = null;
+        if (config('mail.default') === 'log' || (bool) env('SHOW_DEMO_RESET_LINK', false)) {
+            if ($user = User::where('email', $request->email)->first()) {
+                $token = app('auth.password.broker')->createToken($user);
+                if (config('app.env') !== 'local') {
+                    URL::forceScheme('https');
+                }
 
-        // Kullanıcı var mı?
-        $user = User::where('email', $request->email)->first();
-
-        if (!$user) {
-            // Kayıtlı değilse ceza süresi başlat
-            RateLimiter::hit($this->throttleKey($request), $decay = 60);
-
-            throw ValidationException::withMessages([
-                'email' => ['Bu e-posta adresi sistemimizde kayıtlı değil.'],
-            ]);
+                $demoLink = route('password.reset', [
+                    'token' => $token,
+                    'email' => $user->email,
+                ]);
+            }
         }
-
-        // Mail göndermiyoruz, sadece token üretiyoruz
-        $token = app('auth.password.broker')->createToken($user);
-
-        // Şifre sıfırlama bağlantısı (demo amaçlı)
-        $resetUrl = url(route('password.reset', [
-            'token' => $token,
-            'email' => $user->email,
-        ], false));
-
-        // Laravel'in normal "başarılı gönderim" statüsü
-        $status = Password::RESET_LINK_SENT;
 
         if ($status === Password::RESET_LINK_SENT) {
-            // Başarılı istekte rate limiter sıfırlansın
-            RateLimiter::clear($this->throttleKey($request));
-
-            // Frontend’e demo linki döndür
-            return back()->with([
-                'status' => 'Şifre sıfırlama bağlantısı oluşturuldu ✅',
-                'demo_reset_link' => $resetUrl,
-            ]);
+            return back()
+                ->with('status', __($status))
+                ->with('demo_reset_link', $demoLink);
         }
 
-        // Diğer durumlarda deneme sayısını arttır
-        RateLimiter::hit($this->throttleKey($request), $decay = 60);
-
-        throw ValidationException::withMessages([
-            'email' => ['Şifre sıfırlama bağlantısı oluşturulamadı.'],
-        ]);
+        return back()->withErrors(['email' => __($status)]);
     }
+}
 
 
     // RateLimiter kontrolü (max 5 deneme)
