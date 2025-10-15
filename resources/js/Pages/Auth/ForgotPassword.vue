@@ -6,13 +6,13 @@ import lottie from 'lottie-web'
 import hourglassAnim from '@/Animations/hourglass.json'
 
 const page = usePage()
-const status = page.props.status || null
-const demoLink = ref(page.props.demo_reset_link || page.props.flash?.demo_reset_link || null)
-const showLinkPanel = ref(!!demoLink.value)
-
 const form = useForm({ email: '' })
 
-/* Rate limiter */
+/* Demo reset link paneli */
+const demoLink = ref(page.props.flash?.demo_reset_link || page.props.demo_reset_link || null)
+const showLinkPanel = ref(!!demoLink.value)
+
+/* Rate limiter (buton kilidi) */
 const isLocked = ref(false)
 const lockSeconds = ref(0)
 let timer = null
@@ -37,26 +37,13 @@ function startLock(seconds) {
       localStorage.removeItem(STORAGE_KEY)
       window.showToast('Tekrar deneyebilirsiniz ✅', 'info')
     } else {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify({ until: Date.now() + lockSeconds.value * 1000 }))
+      localStorage.setItem(
+        STORAGE_KEY,
+        JSON.stringify({ until: Date.now() + lockSeconds.value * 1000 })
+      )
     }
   }, 1000)
 }
-
-onMounted(() => {
-  if (status) window.showToast(status, 'success')
-  const stored = localStorage.getItem(STORAGE_KEY)
-  if (stored) {
-    const data = JSON.parse(stored)
-    const now = Date.now()
-    if (data.until > now) startLock(Math.ceil((data.until - now) / 1000))
-    else localStorage.removeItem(STORAGE_KEY)
-  }
-
-  // Link paneli 60 saniye sonra gizlensin
-  if (showLinkPanel.value) {
-    setTimeout(() => (showLinkPanel.value = false), 60000)
-  }
-})
 
 /* Lottie kum saati */
 const lottieRef = ref(null)
@@ -79,19 +66,30 @@ watch(isLocked, (locked) => {
   }
 })
 
-/* Kopyala işlemi */
+/* Kopyala & Panel kontrol */
 function copyLink(link) {
   navigator.clipboard.writeText(link)
   window.showToast('Bağlantı kopyalandı 📋', 'info')
 }
-
-/* Paneli yeniden görünür yap */
 function showLinkAgain() {
   showLinkPanel.value = true
   setTimeout(() => (showLinkPanel.value = false), 60000)
 }
 
-/* E-posta gönderimi */
+/* İlk yükleme: kilit & varsa demo link paneli */
+onMounted(() => {
+  const stored = localStorage.getItem(STORAGE_KEY)
+  if (stored) {
+    const data = JSON.parse(stored)
+    const now = Date.now()
+    if (data.until > now) startLock(Math.ceil((data.until - now) / 1000))
+    else localStorage.removeItem(STORAGE_KEY)
+  }
+
+  if (showLinkPanel.value) setTimeout(() => (showLinkPanel.value = false), 60000)
+})
+
+/* Form gönderimi */
 function submit() {
   if (isLocked.value)
     return window.showToast(`Lütfen ${lockSeconds.value} saniye bekleyin ⏳`, 'warning')
@@ -114,9 +112,10 @@ function submit() {
         autoClose: false,
       })
     },
-    onSuccess: () => {
+    // 🔑 ÖNEMLİ: Yeni sayfa nesnesinden flash'ı al
+    onSuccess: (newPage) => {
       if (loadingToastId) window.$toast.remove(loadingToastId)
-      demoLink.value = page.props.flash?.demo_reset_link || null
+      demoLink.value = newPage?.props?.flash?.demo_reset_link || null
       showLinkPanel.value = !!demoLink.value
       if (showLinkPanel.value) setTimeout(() => (showLinkPanel.value = false), 60000)
       window.showToast('📩 Şifre sıfırlama bağlantısı oluşturuldu!', 'success')
@@ -137,8 +136,7 @@ function submit() {
 <template>
   <GuestLayout>
     <div class="relative min-h-screen flex flex-col items-center justify-center px-6 z-10 text-gray-800 dark:text-gray-100">
-      <section v-motion :initial="{ opacity: 0, y: 40 }" :enter="{ opacity: 1, y: 0 }"
-        class="text-center mb-10 mt-12">
+      <section v-motion :initial="{ opacity: 0, y: 40 }" :enter="{ opacity: 1, y: 0 }" class="text-center mb-10 mt-12">
         <h1 class="text-5xl font-extrabold bg-clip-text text-transparent bg-gradient-to-r from-indigo-500 via-blue-500 to-purple-500">
           🔑 Şifremi Unuttum
         </h1>
@@ -154,11 +152,9 @@ function submit() {
             <input v-model="form.email" type="email" class="input" placeholder="ornek@mail.com" :disabled="isLocked" />
           </div>
 
-          <button type="submit" class="btn-primary w-full flex items-center justify-center gap-2"
-            :disabled="form.processing || isLocked">
+          <button type="submit" class="btn-primary w-full flex items-center justify-center gap-2" :disabled="form.processing || isLocked">
             <div v-if="isLocked" ref="lottieRef" class="w-9 h-9 -ml-1"></div>
-            <svg v-else-if="form.processing" class="animate-spin h-5 w-5 text-white"
-              xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+            <svg v-else-if="form.processing" class="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
               <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
               <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
             </svg>
@@ -170,15 +166,12 @@ function submit() {
         <transition name="fade">
           <div v-if="showLinkPanel && demoLink" class="mt-6 p-4 bg-indigo-50 dark:bg-indigo-900/40 border border-indigo-300 dark:border-indigo-700 rounded-lg text-center shadow-sm">
             <p class="text-sm mb-2 text-gray-700 dark:text-gray-300">🔗 Şifre sıfırlama bağlantısı:</p>
-            <a :href="demoLink" target="_blank"
-               class="block text-indigo-600 dark:text-indigo-400 font-medium break-all hover:underline">
+            <a :href="demoLink" target="_blank" class="block text-indigo-600 dark:text-indigo-400 font-medium break-all hover:underline">
               {{ demoLink }}
             </a>
             <div class="mt-3 flex justify-center gap-3">
-              <button class="text-xs text-white bg-indigo-600 hover:bg-indigo-700 px-3 py-1 rounded-md"
-                      @click="copyLink(demoLink)">📋 Kopyala</button>
-              <button class="text-xs text-indigo-600 border border-indigo-600 px-3 py-1 rounded-md hover:bg-indigo-100 dark:hover:bg-indigo-800"
-                      :disabled="isLocked" @click="showLinkAgain">♻️ Yeniden Göster</button>
+              <button class="text-xs text-white bg-indigo-600 hover:bg-indigo-700 px-3 py-1 rounded-md" @click="copyLink(demoLink)">📋 Kopyala</button>
+              <button class="text-xs text-indigo-600 border border-indigo-600 px-3 py-1 rounded-md hover:bg-indigo-100 dark:hover:bg-indigo-800" :disabled="isLocked" @click="showLinkAgain">♻️ Yeniden Göster</button>
             </div>
           </div>
         </transition>
