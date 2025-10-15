@@ -18,26 +18,48 @@ class MyCoursesController extends Controller
             abort(403, 'Bu sayfayı görmek için giriş yapmalısınız.');
         }
     
-        $query = $user->courses()
-            ->select('courses.*')
-            ->withCount(['lessons', 'students']);
-        $sort = in_array($request->query('sort'), ['asc','desc'], true)
-            ? $request->query('sort')
-            : 'desc';
-    
-        $orderCol = method_exists($query, 'qualifyColumn')
-            ? $query->qualifyColumn('created_at')
-            : (new \App\Models\Course)->getTable().'.created_at';
-    
-        $courses = $query
-            ->orderBy($orderCol, $sort)
-            ->paginate(9)
-            ->withQueryString();
-        return Inertia::render('Student/MyCourses/Index', [
-            'courses' => $courses,
-            'filters' => $request->only(['search', 'sort']),
-        ]);
+    $query = $user->courses()
+        ->select('courses.*')
+        ->withCount(['lessons', 'students']);
+
+    if ($raw = $request->string('search')->toString()) {
+        $normalized = Str::of($raw)
+            ->lower()
+            ->replaceMatches('/[^\pL\pN\s]+/u', ' ')
+            ->squish();
+
+        $terms = collect(explode(' ', $normalized))->filter();
+
+        if ($terms->isNotEmpty()) {
+            $like = DB::getDriverName() === 'pgsql' ? 'ILIKE' : 'LIKE';
+
+            $query->where(function ($outer) use ($terms, $like) {
+                foreach ($terms as $term) {
+                    $pattern = "%{$term}%";
+                    $outer->where(function ($q) use ($pattern, $like) {
+                        $q->where('courses.title', $like, $pattern)
+                          ->orWhere('courses.description', $like, $pattern)
+                          ->orWhere('courses.instructor', $like, $pattern);
+                    });
+                }
+            });
+        }
     }
+
+    $sort = in_array($request->query('sort'), ['asc','desc'], true)
+        ? $request->query('sort')
+        : 'desc';
+        
+    $courses = $query
+        ->orderBy('courses.created_at', $sort)
+        ->paginate(9)
+        ->withQueryString();
+
+    return Inertia::render('Student/MyCourses/Index', [
+        'courses' => $courses,
+        'filters' => $request->only(['search', 'sort']),
+    ]);
+}
 
     public function show(Course $course, $id)
     {
