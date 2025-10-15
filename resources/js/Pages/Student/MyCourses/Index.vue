@@ -145,8 +145,9 @@ watchDebounced(
         replace: true,
         only: ['courses', 'filters'],
         onSuccess: (page) => {
+          courses.value = page.props.courses || { data: [] }
           studentStore.setCourses(page.props.courses?.data || [])
-          paginationStore.setLinks(page.props.courses?.links || [])
+          paginationStore.setLinks?.(page.props.courses?.links || [])
         },
       }
     )
