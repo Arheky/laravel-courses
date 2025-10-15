@@ -2,6 +2,9 @@
 
 > **Modern, güvenli ve performanslı bir kurs yönetim platformu** — Laravel 12, Vue 3 ve Inertia.js ile geliştirilmiştir.
 
+## 🌐 Canlı Demo
+🔗 **https://laravel-courses.onrender.com**
+
 ---
 
 ## 🚀 Özellikler
