@@ -3,21 +3,22 @@
 namespace App\Http\Requests\Auth;
 
 use Illuminate\Auth\Events\Lockout;
+use Illuminate\Contracts\Validation\Validator;
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Http\Exceptions\HttpResponseException;
 use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 
 class LoginRequest extends FormRequest
 {
-    private const MAX_ATTEMPTS = 5;
-    private const DECAY_SECONDS = 60;
-
-    private const BASE_BLOCK_MIN   = 5;
-    private const MAX_BLOCK_MIN    = 60;
-    private const OFFENSE_TTL_HOURS= 12;
+    private const MAX_ATTEMPTS_PER_STAGE = 5;
+    private const ATTEMPT_DECAY_SECONDS  = 60;
+    private const BASE_COOLDOWN_SECONDS  = 300;
+    private const COOLDOWN_CAP_SECONDS   = 3600;
+    private const STAGE_TTL_HOURS        = 12;
 
     public function authorize(): bool { return true; }
 
@@ -29,21 +30,22 @@ class LoginRequest extends FormRequest
             'remember' => ['sometimes','boolean'],
         ];
     }
-
     public function authenticate(): void
     {
         $this->ensureIsNotRateLimited();
 
         if (! Auth::attempt($this->only('email','password'), $this->boolean('remember'))) {
 
-            RateLimiter::hit($this->throttleKey(), self::DECAY_SECONDS);
+            RateLimiter::hit($this->throttleKey(), self::ATTEMPT_DECAY_SECONDS);
 
-            if (RateLimiter::tooManyAttempts($this->throttleKey(), self::MAX_ATTEMPTS)) {
-                $offense  = (int) Cache::get($this->offenseKey(), 0);
-                $cooldown = $this->cooldownForOffense($offense);
+            if (RateLimiter::tooManyAttempts($this->throttleKey(), self::MAX_ATTEMPTS_PER_STAGE)) {
+                event(new Lockout($this));
+
+                $stage    = (int) Cache::get($this->stageKey(), 1);
+                $cooldown = $this->cooldownForStage($stage);
 
                 Cache::put($this->blockKey(), now()->addSeconds($cooldown)->timestamp, $cooldown);
-                Cache::put($this->offenseKey(), $offense + 1, now()->addHours(self::OFFENSE_TTL_HOURS));
+                Cache::put($this->stageKey(), $stage + 1, now()->addHours(self::STAGE_TTL_HOURS));
 
                 RateLimiter::clear($this->throttleKey());
 
@@ -51,36 +53,23 @@ class LoginRequest extends FormRequest
             }
 
             throw ValidationException::withMessages([
-                'email' => 'Girdiğiniz e-posta adresi veya şifre hatalı ❌',
+                'email' => __('Girdiğiniz e-posta adresi veya şifre hatalı ❌'),
             ]);
         }
 
         RateLimiter::clear($this->throttleKey());
         Cache::forget($this->blockKey());
-        Cache::forget($this->offenseKey());
+        Cache::forget($this->stageKey());
     }
 
-    public function ensureIsNotRateLimited(): void
+    protected function ensureIsNotRateLimited(): void
     {
-        if (Cache::has($this->blockKey())) {
-            $remaining = max(Cache::get($this->blockKey()) - now()->timestamp, 1);
-            $this->throwRateLimited($remaining);
-        }
-
-        if (! RateLimiter::tooManyAttempts($this->throttleKey(), self::MAX_ATTEMPTS)) {
+        if (! Cache::has($this->blockKey())) {
             return;
         }
 
-        event(new Lockout($this));
-
-        $offense  = (int) Cache::get($this->offenseKey(), 0);
-        $cooldown = $this->cooldownForOffense($offense);
-
-        Cache::put($this->blockKey(), now()->addSeconds($cooldown)->timestamp, $cooldown);
-        Cache::put($this->offenseKey(), $offense + 1, now()->addHours(self::OFFENSE_TTL_HOURS));
-        RateLimiter::clear($this->throttleKey());
-
-        $this->throwRateLimited($cooldown);
+        $remaining = max(Cache::get($this->blockKey()) - now()->timestamp, 1);
+        $this->throwRateLimited($remaining);
     }
 
     protected function throwRateLimited(int $seconds): void
@@ -88,20 +77,38 @@ class LoginRequest extends FormRequest
         $msg = "Çok fazla hatalı giriş denemesi! {$seconds} saniye bekleyin ⏳";
         session()->flash('retry_after', $seconds);
 
+        if ($this->headers->has('X-Inertia')) {
+            throw new HttpResponseException(
+                back()
+                    ->withErrors(['email' => $msg])
+                    ->with('retry_after', $seconds)
+                    ->setStatusCode(303)
+            );
+        }
+        if ($this->expectsJson()) {
+            throw new HttpResponseException(
+                response()->json([
+                    'message'     => $msg,
+                    'retry_after' => $seconds,
+                    'errors'      => ['email' => [$msg]],
+                ], 429)
+            );
+        }
+
         $e = ValidationException::withMessages(['email' => $msg]);
         $e->status = 429;
         throw $e;
     }
 
-    protected function cooldownForOffense(int $offense): int
+    protected function cooldownForStage(int $stage): int
     {
-        $minutes = min(self::BASE_BLOCK_MIN * (2 ** max(0, $offense)), self::MAX_BLOCK_MIN);
-        return $minutes * 60;
+        $seconds = self::BASE_COOLDOWN_SECONDS * (2 ** max(0, $stage - 1));
+        return min($seconds, self::COOLDOWN_CAP_SECONDS);
     }
 
-    protected function throttleKey(): string
+    public function throttleKey(): string
     {
-        return Str::transliterate(Str::lower($this->input('email')) . '|' . $this->ip());
+        return 'login:' . Str::lower($this->string('email')->toString());
     }
 
     protected function blockKey(): string
@@ -109,8 +116,8 @@ class LoginRequest extends FormRequest
         return 'login_blocked:' . $this->throttleKey();
     }
 
-    protected function offenseKey(): string
+    protected function stageKey(): string
     {
-        return 'login_offense:' . $this->throttleKey();
+        return 'login_stage:' . $this->throttleKey();
     }
 }
