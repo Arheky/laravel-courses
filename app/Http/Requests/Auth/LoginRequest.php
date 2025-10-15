@@ -62,21 +62,26 @@ class LoginRequest extends FormRequest
     protected function throwRateLimited(int $seconds): void
     {
         $msg = "Çok fazla hatalı giriş denemesi! {$seconds} saniye bekleyin ⏳";
+    
         if ($this->headers->has('X-Inertia')) {
-            throw new HttpResponseException(
-                back()
-                    ->withErrors(['email' => $msg])
-                    ->with('retry_after', $seconds)
-                    ->setStatusCode(303)
-            );
+            $resp = back()
+                ->withErrors(['email' => $msg])
+                ->with('retry_after', $seconds)
+                ->setStatusCode(303);
+            $resp->headers->set('Retry-After', $seconds);
+            $resp->headers->set('X-Retry-After', $seconds);
+    
+            throw new HttpResponseException($resp);
         }
+    
         if ($this->expectsJson()) {
             throw new HttpResponseException(response()->json([
                 'message'     => $msg,
                 'retry_after' => $seconds,
                 'errors'      => ['email' => [$msg]],
-            ], 429));
+            ], 429)->header('Retry-After', $seconds));
         }
+    
         $e = ValidationException::withMessages(['email' => $msg]);
         $e->status = 429;
         throw $e;
@@ -90,8 +95,7 @@ class LoginRequest extends FormRequest
     public function throttleKey(): string
     {
         $email = Str::lower((string) $this->input('email'));
-        $ua    = md5((string) $this->header('User-Agent'));
-        return "login:{$email}|ua:{$ua}";
+        return "login:{$email}";
     }
 
     protected function blockKey(): string  { return 'login_blocked:' . $this->throttleKey(); }
