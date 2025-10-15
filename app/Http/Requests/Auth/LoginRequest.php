@@ -31,77 +31,76 @@ class LoginRequest extends FormRequest
             'remember' => ['sometimes', 'boolean'],
         ];
     }
-
     public function authenticate(): void
     {
         $this->ensureIsNotRateLimited();
+
         if (! Auth::attempt($this->only('email', 'password'), $this->boolean('remember'))) {
-            RateLimiter::hit($this->throttleKey(), self::ATTEMPT_WINDOW_SECONDS);
-            if (RateLimiter::tooManyAttempts($this->throttleKey(), self::MAX_ATTEMPTS)) {
-                event(new Lockout($this));
-                $this->applyProgressiveBlock();
+    
+            $decaySeconds = $this->decaySeconds();
+            RateLimiter::hit($this->throttleKey(), $decaySeconds);
+
+            if (RateLimiter::tooManyAttempts($this->throttleKey(), $this->maxAttempts())) {
+                $seconds = RateLimiter::availableIn($this->throttleKey());
+                Cache::put('login_blocked:'.$this->throttleKey(), now()->addSeconds($seconds)->timestamp, $seconds);
+                $this->throwRateLimited($seconds);
             }
+
             throw ValidationException::withMessages([
-                'email' => 'Girdiğiniz e-posta adresi veya şifre hatalı ❌',
+                'email' => __('Girdiğiniz e-posta adresi veya şifre hatalı ❌'),
             ]);
         }
+
         RateLimiter::clear($this->throttleKey());
-        Cache::forget($this->blockKey());
-        Cache::forget($this->offenseKey());
+        Cache::forget('login_blocked:'.$this->throttleKey());
     }
+
     public function ensureIsNotRateLimited(): void
     {
-        if (! Cache::has($this->blockKey())) {
+        $cacheKey = 'login_blocked:'.$this->throttleKey();
+        if (Cache::has($cacheKey)) {
+            $remaining = max(Cache::get($cacheKey) - now()->timestamp, 1);
+            $this->throwRateLimited($remaining);
+        }
+
+        if (! RateLimiter::tooManyAttempts($this->throttleKey(), $this->maxAttempts())) {
             return;
         }
 
-        $timestamp = (int) Cache::get($this->blockKey());
-        $remaining = max($timestamp - now()->timestamp, 1);
+        event(new Lockout($this));
+        $seconds = RateLimiter::availableIn($this->throttleKey());
+        Cache::put($cacheKey, now()->addSeconds($seconds)->timestamp, $seconds);
 
-        $this->throwRateLimited($remaining);
-    }
-    protected function applyProgressiveBlock(): never
-    {
-        $offense = (int) Cache::get($this->offenseKey(), 0) + 1;
-        $minutes = (int) min(self::BASE_BLOCK_MINUTES * (2 ** max($offense - 1, 0)), self::MAX_BLOCK_MINUTES);
-        $seconds = $minutes * 60;
-        Cache::put($this->offenseKey(), $offense, now()->addHours(self::OFFENSE_TTL_HOURS));
-        Cache::put($this->blockKey(), now()->addSeconds($seconds)->timestamp, $seconds);
-        RateLimiter::clear($this->throttleKey());
         $this->throwRateLimited($seconds);
     }
-    protected function throwRateLimited(int $seconds): never
+
+    protected function throwRateLimited(int $seconds): void
     {
-        $message = "Çok fazla hatalı giriş denemesi! {$seconds} saniye bekleyin ⏳";
-
-        $payload = [
-            'message'     => $message,
-            'retry_after' => $seconds,
-            'errors'      => ['email' => [$message]],
-        ];
-
-        $e = ValidationException::withMessages($payload['errors']);
-        $e->status   = 429;
-        $e->response = response()->json($payload, 429);
-
-        throw $e;
+        $msg = "Çok fazla hatalı giriş denemesi! {$seconds} saniye bekleyin ⏳";
+        if ($this->headers->has('X-Inertia')) {
+            throw new HttpResponseException(
+                back()
+                    ->withErrors(['email' => $msg])
+                    ->with('retry_after', $seconds)
+                    ->setStatusCode(303)
+            );
+        }
+        if ($this->expectsJson()) {
+            throw new HttpResponseException(
+                response()->json([
+                    'message'     => $msg,
+                    'retry_after' => $seconds,
+                    'errors'      => ['email' => [$msg]],
+                ], 429)
+            );
+        }
+        throw ValidationException::withMessages(['email' => $msg]);
     }
+    protected function maxAttempts(): int { return 5; }
+    protected function decaySeconds(): int { return 60; }
 
     public function throttleKey(): string
     {
-        $email = Str::lower((string) $this->input('email'));
-        $ip    = $this->ip() ?: request()->getClientIp() ?: 'unknown';
-
-        return Str::transliterate($email . '|' . $ip);
-    }
-
-    protected function blockKey(): string
-    {
-        return 'login_blocked:' . $this->throttleKey();
-    }
-
-    protected function offenseKey(): string
-    {
-        return 'login_offense:' . $this->throttleKey();
+        return Str::transliterate(Str::lower($this->input('email')).'|'.$this->ip());
     }
 }
