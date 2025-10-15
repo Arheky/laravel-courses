@@ -30,46 +30,39 @@ class LoginRequest extends FormRequest
             'remember' => ['sometimes','boolean'],
         ];
     }
+
     public function authenticate(): void
     {
         $this->ensureIsNotRateLimited();
 
         if (! Auth::attempt($this->only('email','password'), $this->boolean('remember'))) {
-
             RateLimiter::hit($this->throttleKey(), self::ATTEMPT_DECAY_SECONDS);
-
             if (RateLimiter::tooManyAttempts($this->throttleKey(), self::MAX_ATTEMPTS_PER_STAGE)) {
-                event(new Lockout($this));
-
                 $stage    = (int) Cache::get($this->stageKey(), 1);
                 $cooldown = $this->cooldownForStage($stage);
 
                 Cache::put($this->blockKey(), now()->addSeconds($cooldown)->timestamp, $cooldown);
                 Cache::put($this->stageKey(), $stage + 1, now()->addHours(self::STAGE_TTL_HOURS));
-
                 RateLimiter::clear($this->throttleKey());
 
                 $this->throwRateLimited($cooldown);
             }
 
             throw ValidationException::withMessages([
-                'email' => __('Girdiğiniz e-posta adresi veya şifre hatalı ❌'),
+                'email' => 'Girdiğiniz e-posta adresi veya şifre hatalı ❌',
             ]);
         }
-
         RateLimiter::clear($this->throttleKey());
         Cache::forget($this->blockKey());
         Cache::forget($this->stageKey());
     }
 
-    protected function ensureIsNotRateLimited(): void
+    public function ensureIsNotRateLimited(): void
     {
-        if (! Cache::has($this->blockKey())) {
-            return;
+        if (Cache::has($this->blockKey())) {
+            $remaining = max(Cache::get($this->blockKey()) - now()->timestamp, 1);
+            $this->throwRateLimited($remaining);
         }
-
-        $remaining = max(Cache::get($this->blockKey()) - now()->timestamp, 1);
-        $this->throwRateLimited($remaining);
     }
 
     protected function throwRateLimited(int $seconds): void
@@ -85,6 +78,7 @@ class LoginRequest extends FormRequest
                     ->setStatusCode(303)
             );
         }
+
         if ($this->expectsJson()) {
             throw new HttpResponseException(
                 response()->json([
@@ -105,19 +99,11 @@ class LoginRequest extends FormRequest
         $seconds = self::BASE_COOLDOWN_SECONDS * (2 ** max(0, $stage - 1));
         return min($seconds, self::COOLDOWN_CAP_SECONDS);
     }
-
     public function throttleKey(): string
     {
-        return 'login:' . Str::lower($this->string('email')->toString());
+        return 'login:' . Str::lower($this->string('email')->toString()) . '|' . $this->ip();
     }
 
-    protected function blockKey(): string
-    {
-        return 'login_blocked:' . $this->throttleKey();
-    }
-
-    protected function stageKey(): string
-    {
-        return 'login_stage:' . $this->throttleKey();
-    }
+    protected function blockKey(): string { return 'login_blocked:' . $this->throttleKey(); }
+    protected function stageKey(): string { return 'login_stage:'   . $this->throttleKey(); }
 }
