@@ -119,6 +119,12 @@ function submit() {
     onSuccess: () => {
       if (loadingToastId) window.$toast.remove(loadingToastId)
       const props = usePage().props
+      const txt = String(props?.errors?.email || '')
+      const mm = txt.match(/(\d+)\s*saniye/)
+      if (mm) {
+          startLock(parseInt(mm[1], 10))
+          return
+      }
       const hasErrors = props?.errors && Object.keys(props.errors).length > 0
       const isLoggedIn = !!props?.auth?.user
       const stillOnLogin = route().current('login')
